@@ -1,22 +1,82 @@
-import React, { useRef, useCallback } from "react";
-import {View,Text,TouchableOpacity,StyleSheet,FlatList,Dimensions,} from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
+import GradientButton from "@/components/GradientButton";
+import BackButton from "@/components/ui/BackButton";
 import { Audio } from "expo-av";
-
-const { width } = Dimensions.get("window");
+import { useFocusEffect, useRouter } from "expo-router";
+import * as Speech from "expo-speech";
+import React, { useCallback, useEffect, useRef } from "react";
+import { FlatList, ImageBackground, Platform, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 const lessons = [
-  { id: "1", title: "Vowel digraphs in common words", screen: "common" },
-  { id: "2", title: "Common & Proper Nouns", screen: "nouns" },
-  { id: "3", title: "Tense-related words", screen: "tenses" },  
-  { id: "4", title: "Irregularly spelled words", screen: "irregular" },
-  { id: "5", title: "Comparison words", screen: "comparison" },
-  { id: "6", title: "Plural nouns", screen: "plural" },
-  { id: "7", title: "Question words", screen: "questions" },
-  { id: "8", title: "Dialogue words", screen: "dialogue" },
-  { id: "9", title: "Context clues words", screen: "context" },
-  { id: "10", title: "Problem-solving words", screen: "problemsolving" },
-  { id: "11", title: "Irregularly spelled words", screen: "spelled" },
+  { 
+    id: "1", 
+    title: "Common Words", 
+    screen: "/(tabs)/common", 
+    icon: "chatbubbles" as const,
+    colors: ["#FFB74D", "#FF8A65"] as const 
+  },
+  { 
+    id: "2", 
+    title: "Nouns", 
+    screen: "/(tabs)/nouns", 
+    icon: "pricetag" as const,
+    colors: ["#EF5350", "#E57373"] as const 
+  },
+  { 
+    id: "3", 
+    title: "Tense Words", 
+    screen: "/(tabs)/tenses", 
+    icon: "time" as const,
+    colors: ["#42A5F5", "#64B5F6"] as const 
+  },
+  { 
+    id: "4", 
+    title: "Irregular Words", 
+    screen: "/(tabs)/irregular", 
+    icon: "extension-puzzle" as const,
+    colors: ["#AB47BC", "#BA68C8"] as const 
+  },
+  { 
+    id: "5", 
+    title: "Comparison Words", 
+    screen: "/(tabs)/comparison", 
+    icon: "resize" as const,
+    colors: ["#66BB6A", "#81C784"] as const 
+  },
+  { 
+    id: "7", 
+    title: "Question Words", 
+    screen: "/(tabs)/questions", 
+    icon: "help-circle" as const,
+    colors: ["#FFA726", "#FFB74D"] as const 
+  },
+  { 
+    id: "8", 
+    title: "Dialogue Words", 
+    screen: "/(tabs)/dialogue", 
+    icon: "chatbox-ellipses" as const,
+    colors: ["#EC407A", "#F06292"] as const 
+  },
+  { 
+    id: "9", 
+    title: "Context Clues", 
+    screen: "/(tabs)/context", 
+    icon: "search" as const,
+    colors: ["#5C6BC0", "#7986CB"] as const 
+  },
+  { 
+    id: "10", 
+    title: "Problem Solving", 
+    screen: "/(tabs)/problemsolving", 
+    icon: "bulb" as const,
+    colors: ["#26A69A", "#4DB6AC"] as const 
+  },
+  { 
+    id: "11", 
+    title: "Spelling Practice", 
+    screen: "/(tabs)/spelled", 
+    icon: "create" as const,
+    colors: ["#29B6F6", "#4FC3F7"] as const 
+  },
 ];
 
 const Vocab = () => {
@@ -24,186 +84,194 @@ const Vocab = () => {
   const clickSoundRef = useRef<Audio.Sound | null>(null);
   const backgroundMusicRef = useRef<Audio.Sound | null>(null);
 
-  // Stop background music
+  // ✅ STOP BACKGROUND MUSIC
   const stopBackgroundMusic = async () => {
     if (backgroundMusicRef.current) {
-      await backgroundMusicRef.current.stopAsync();
-      await backgroundMusicRef.current.unloadAsync();
+      try {
+        await backgroundMusicRef.current.stopAsync();
+      } catch (error) {
+        console.log("Error stopping background music:", error);
+      }
+      try {
+        await backgroundMusicRef.current.unloadAsync();
+      } catch (error) {
+        console.log("Error unloading background music:", error);
+      }
       backgroundMusicRef.current = null;
     }
   };
 
-  // Play click sound then navigate
-  const playAndNavigate = async (screenName: string) => {
+  // ✅ REUSABLE SOUND + NAVIGATION
+  const playClickAndNavigate = async (route?: string, goBack?: boolean) => {
     try {
       await stopBackgroundMusic();
+
+      // Cleanup previous click sound if exists
+      if (clickSoundRef.current) {
+        try {
+          await clickSoundRef.current.unloadAsync();
+        } catch (error) {
+           console.log("Error unloading previous click sound:", error);
+        }
+        clickSoundRef.current = null;
+      }
+
       const { sound } = await Audio.Sound.createAsync(
         require("../assets/music/drop.mp3")
       );
+
       clickSoundRef.current = sound;
       await sound.playAsync();
 
       sound.setOnPlaybackStatusUpdate(async (status) => {
+        if (!status.isLoaded) return;
+
         if (status.didJustFinish) {
-          await sound.unloadAsync();
-          router.push(screenName);
+          try {
+             if (clickSoundRef.current === sound) {
+                 clickSoundRef.current = null;
+             }
+             await sound.unloadAsync();
+          } catch (error) {
+             console.log("Error unloading finished click sound:", error);
+          }
+
+          if (goBack) {
+            router.back();
+          } else if (route) {
+            router.push(route as any);
+          }
         }
       });
     } catch (error) {
-      console.error("Navigation sound error:", error);
-      router.push(screenName);
+      console.log("Navigation sound error:", error);
+
+      if (goBack) router.back();
+      if (route) router.push(route as any);
     }
   };
 
-  // Back button with sound
-  const playAndGoBack = async () => {
-    try {
-      await stopBackgroundMusic();
-      const { sound } = await Audio.Sound.createAsync(
-        require("../assets/music/drop.mp3")
-      );
-      await sound.playAsync();
-
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.didJustFinish) {
-          await sound.unloadAsync();
-          router.back();
-        }
-      });
-    } catch (error) {
-      router.back();
-    }
-  };
-
-  // Background music
+  // ✅ BACKGROUND MUSIC
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
 
-      const playBackgroundMusic = async () => {
+      const playMusic = async () => {
         try {
+          // Ensure no previous music is playing
+          await stopBackgroundMusic();
+
           const { sound } = await Audio.Sound.createAsync(
             require("../assets/music/fun.mp3"),
             { isLooping: true }
           );
+
           if (isActive) {
             backgroundMusicRef.current = sound;
             await sound.playAsync();
+          } else {
+            // If component became inactive during load, unload immediately
+            await sound.unloadAsync();
           }
         } catch (error) {
-          console.log("Background music error", error);
+          console.log("Background music error:", error);
         }
       };
 
-      playBackgroundMusic();
+      playMusic();
 
       return () => {
         isActive = false;
         stopBackgroundMusic();
+        Speech.stop();
       };
     }, [])
   );
 
+  useEffect(() => {
+    return () => {
+      if (clickSoundRef.current) {
+        clickSoundRef.current.unloadAsync().catch((err) => console.log("Unload click sound error:", err));
+      }
+      if (backgroundMusicRef.current) {
+        backgroundMusicRef.current.unloadAsync().catch((err) => console.log("Unload bg music error:", err));
+      }
+    };
+  }, []);
+
   return (
-    <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={playAndGoBack}>
-          <Text style={styles.backText}>BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>VOCABULARY</Text>
-      </View>
+    <ImageBackground source={require("../assets/int.png")} style={styles.container} resizeMode="cover">
+      <SafeAreaView style={styles.safeArea}>
+        {/* HEADER */}
+        <View style={styles.header}>
+          <BackButton targetRoute="/home" />
 
-      <View style={styles.divider} />
+          <Text style={styles.title}>VOCABULARY</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-      {/* SWIPE LESSONS */}
-      <FlatList
-        data={lessons}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        snapToAlignment="center"
-        decelerationRate="fast"
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.lessonItem}
-            activeOpacity={0.8}
-            onPress={() => playAndNavigate(item.screen)}
-          >
-            <Text style={styles.lessonTitle}>{item.title}</Text>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
+        {/* LESSONS LIST */}
+        <FlatList
+          data={lessons}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <GradientButton
+              title={item.title}
+              icon={item.icon}
+              colors={item.colors}
+              onPress={() => playClickAndNavigate(item.screen)}
+            />
+          )}
+        />
+      </SafeAreaView>
+    </ImageBackground>
   );
 };
+
+export default Vocab;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#74b9ff",
-    paddingTop: 60,
-    alignItems: "center",
+  },
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+  },
+  navButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 5,
+  },
+  navButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffffff',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#ffffffff",
+  },
+  headerSpacer: {
+    width: 70, // Approximate width of navButton to balance title
+  },
+  list: {
+    paddingBottom: 40,
     width: "100%",
     paddingHorizontal: 20,
   },
-  backButton: {
-    backgroundColor: "#dff9fb",
-    padding: 10,
-    borderRadius: 30,
-    elevation: 4,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#0984e3",
-  },
-  title: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
-    marginRight: 40,
-  },
-  divider: {
-    width: "90%",
-    height: 2,
-    backgroundColor: "#fff",
-    marginVertical: 20,
-  },
-  list: {
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  lessonItem: {
-    width: width * 0.75,
-    height: 220,
-    backgroundColor: "#ffeaa7",
-    borderRadius: 30,
-    marginHorizontal: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 6,
-  },
-  lessonTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#2d3436",
-    textAlign: "center",
-    paddingHorizontal: 10,
-  },
-  swipeHint: {
-    marginTop: 15,
-    fontSize: 14,
-    color: "#636e72",
-  },
 });
-
-export default Vocab;

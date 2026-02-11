@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, Animated, ImageBackground, StyleSheet, Dimensions } from "react-native";
 import { Audio } from "expo-av";
 import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, ImageBackground, StyleSheet, View } from "react-native";
 
 const { width } = Dimensions.get("window");
 
@@ -46,11 +47,12 @@ export default function Start() {
 
   return (
     <ImageBackground
-      source={require("../assets/back.png")}
+      source={require("../assets/ba.png")}
       style={styles.container}
       resizeMode="cover"
     >
-      <Animated.Image source={require("../assets/images/dong.png")} style={styles.logo} />
+      <StatusBar translucent backgroundColor="transparent" style="dark" />
+      {/*<Animated.Image source={require("../assets/images/dong.png")} style={styles.logo} />*/}
       <View style={styles.lineContainer}>
         <Animated.View style={[styles.line, { width: lineAnim }]} />
       </View>
@@ -61,19 +63,25 @@ export default function Start() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
+    width: "100%",
+    height: "100%",
     justifyContent: "center", 
-    alignItems: "center" },
+    alignItems: "center",
+   
+  },
   logo: { 
-    width: 300, 
-    height: 300, 
+    width: 200, 
+    height: 200, 
     resizeMode: "contain", 
-    marginBottom: 50 },
+    marginBottom: 50 
+  },
   lineContainer: {
     height: 5,
     width: width * 0.8,
     backgroundColor: "#ffffff50",
     borderRadius: 3,
     overflow: "hidden",
+    marginTop: 390,
   },
   line: { height: 5, backgroundColor: "#4AC3FF", borderRadius: 3 },
 });

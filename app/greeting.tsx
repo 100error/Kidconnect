@@ -54,7 +54,7 @@ export default function Greeting() {
 
   return (
     <ImageBackground
-      source={require("../assets/back.png")}
+      source={require("../assets/in.png")}
       style={styles.container}
       resizeMode="cover"
     >

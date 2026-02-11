@@ -1,33 +1,55 @@
-import React, { useRef, useCallback } from "react";
-import {View,Text,TouchableOpacity,StyleSheet,FlatList,Dimensions,} from "react-native";
-import { useRouter, useFocusEffect } from "expo-router";
-import { Audio, AVPlaybackStatus } from "expo-av";
+import GradientButton from "@/components/GradientButton";
+import BackButton from "@/components/ui/BackButton";
+import { Audio } from "expo-av";
+import { useFocusEffect, useRouter } from "expo-router";
+import * as Speech from "expo-speech";
+import React, { useCallback, useRef } from "react";
+import { FlatList, ImageBackground, Platform, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
-const { width } = Dimensions.get("window");
-
-type Lesson = {
-  id: string;
-  title: string;
-  screen: string;
-};
-
-const lessons: Lesson[] = [
-  { id: "1", title: "Word Pronunciation", screen: "/wordpronunce" },
-  { id: "2", title: "Sentence Builder", screen: "/sentencebuild" },
-  { id: "3", title: "Fix the Sentence", screen: "/fixsentence" },
+const lessons = [
+  { 
+    id: "1", 
+    title: "Word Practice", 
+    screen: "/(tabs)/practice/pronunciation", 
+    icon: "mic" as const,
+    colors: ["#66BB6A", "#81C784"] as const 
+  },
+  { 
+    id: "2", 
+    title: "Sentence Builder", 
+    screen: "/(tabs)/sentencebuild", 
+    icon: "construct" as const,
+    colors: ["#29B6F6", "#4FC3F7"] as const 
+  },
+  { 
+    id: "3", 
+    title: "Fix the Sentence", 
+    screen: "/(tabs)/fixsentence", 
+    icon: "build" as const,
+    colors: ["#AB47BC", "#BA68C8"] as const 
+  },
+  { 
+    id: "4", 
+    title: "Present Simple Tense", 
+    screen: "/(tabs)/presentsimpletense", 
+    icon: "time" as const,
+    colors: ["#FFB74D", "#FF9800"] as const 
+  },
 ];
 
-export default function Pract(): JSX.Element {
+export default function Pract() {
   const router = useRouter();
-
-  // ✅ PROPERLY TYPED REF
   const backgroundMusicRef = useRef<Audio.Sound | null>(null);
 
   // ✅ STOP & CLEANUP MUSIC
   const stopBackgroundMusic = async () => {
     if (backgroundMusicRef.current) {
-      await backgroundMusicRef.current.stopAsync();
-      await backgroundMusicRef.current.unloadAsync();
+      try {
+        await backgroundMusicRef.current.stopAsync();
+      } catch (e) { console.log("Stop error", e); }
+      try {
+        await backgroundMusicRef.current.unloadAsync();
+      } catch (e) { console.log("Unload error", e); }
       backgroundMusicRef.current = null;
     }
   };
@@ -43,9 +65,9 @@ export default function Pract(): JSX.Element {
 
       await sound.playAsync();
 
-      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
+      sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
+          try { await sound.unloadAsync(); } catch (e) {}
           router.push(screen as any);
         }
       });
@@ -54,27 +76,6 @@ export default function Pract(): JSX.Element {
     }
   };
 
-  // ✅ PLAY CLICK SOUND THEN GO BACK
-  const playAndGoBack = async () => {
-    try {
-      await stopBackgroundMusic();
-
-      const { sound } = await Audio.Sound.createAsync(
-        require("../assets/music/drop.mp3")
-      );
-
-      await sound.playAsync();
-
-      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-          router.back();
-        }
-      });
-    } catch {
-      router.back();
-    }
-  };
 
   // ✅ AUTO PLAY BACKGROUND MUSIC + CLEANUP
   useFocusEffect(
@@ -82,14 +83,21 @@ export default function Pract(): JSX.Element {
       let isActive = true;
 
       const playMusic = async () => {
-        const { sound } = await Audio.Sound.createAsync(
-          require("../assets/music/fun.mp3"),
-          { isLooping: true }
-        );
+        try {
+          await stopBackgroundMusic();
+          const { sound } = await Audio.Sound.createAsync(
+            require("../assets/music/fun.mp3"),
+            { isLooping: true }
+          );
 
-        if (isActive) {
-          backgroundMusicRef.current = sound;
-          await sound.playAsync();
+          if (isActive) {
+            backgroundMusicRef.current = sound;
+            await sound.playAsync();
+          } else {
+             await sound.unloadAsync();
+          }
+        } catch (error) {
+           console.log("Background music error:", error);
         }
       };
 
@@ -98,103 +106,81 @@ export default function Pract(): JSX.Element {
       return () => {
         isActive = false;
         stopBackgroundMusic();
+        Speech.stop();
       };
     }, [])
   );
 
   return (
-    <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={playAndGoBack}>
-          <Text style={styles.backText}>BACK</Text>
-        </TouchableOpacity>
+    <ImageBackground source={require("../assets/int.png")} style={styles.container} resizeMode="cover">
+      <SafeAreaView style={styles.safeArea}>
+        {/* HEADER */}
+        <View style={styles.header}>
+          <BackButton targetRoute="/home" />
+          <Text style={styles.title}>PRACTICES</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-        <Text style={styles.title}>PRACTICES</Text>
-      </View>
-
-      <View style={styles.divider} />
-
-      {/* HORIZONTAL SWIPE */}
-      <FlatList
-        data={lessons}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.lessonItem}
-            activeOpacity={0.8}
-            onPress={() => playAndNavigate(item.screen)}
-          >
-            <Text style={styles.lessonTitle}>{item.title}</Text>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
+        {/* LESSON LIST */}
+        <FlatList
+          data={lessons}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <GradientButton
+              title={item.title}
+              icon={item.icon}
+              colors={item.colors}
+              onPress={() => playAndNavigate(item.screen)}
+            />
+          )}
+        />
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
-
-/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#a29bfe",
-    paddingTop: 60,
-    alignItems: "center",
+  },
+  safeArea: {
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    marginBottom: 15,
+    paddingVertical: 15,
   },
-  backButton: {
-    backgroundColor: "#ffffff",
-    padding: 10,
-    borderRadius: 30,
-    elevation: 5,
+  navButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 5,
   },
-  backText: {
-    fontWeight: "bold",
-    color: "#6c5ce7",
+  navButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#f9f9f9ff',
   },
   title: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
-    color: "#ffffff",
-    marginRight: 40,
+    color: "#f7f5f9ff",
   },
-  divider: {
-    width: "90%",
-    height: 2,
-    backgroundColor: "#fff",
-    marginBottom: 20,
+  headerSpacer: {
+    width: 70, // Approximate width of navButton to balance title
   },
   list: {
-    alignItems: "center",
-    paddingHorizontal: 10,
-  },
-  lessonItem: {
-    width: width * 0.8,
-    height: 220,
-    backgroundColor: "#ffeaa7",
-    borderRadius: 25,
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 10,
-    elevation: 6,
-  },
-  lessonTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    textAlign: "center",
-    color: "#2d3436",
+    paddingBottom: 40,
+    width: "100%",
+    paddingHorizontal: 20,
   },
 });

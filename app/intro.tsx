@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from "react-native";
-import { Video, ResizeMode, Audio } from "expo-av";
+import { Audio, ResizeMode, Video } from "expo-av";
+import { BlurView } from "expo-blur";
 import { router } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Intro() {
   const videoRef = useRef<Video>(null);
@@ -81,14 +82,19 @@ export default function Intro() {
 
   return (
     <ImageBackground
-      source={require("../assets/back.png")}
+      source={require("../assets/in.png")}
       style={styles.container}
       resizeMode="cover"
     >
+      <View style={styles.skipButtonContainer}>
+        <TouchableOpacity onPress={handleContinue} style={styles.skipButton}>
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+      </View>
       {/* Full screen Kico */}
       <Video
         ref={videoRef} 
-        source={require("../assets/videos/intro.mp4")}
+        source={require("../assets/videos/kik.mp4")}
         style={StyleSheet.absoluteFillObject}
         resizeMode={ResizeMode.COVER}
         shouldPlay
@@ -97,7 +103,11 @@ export default function Intro() {
 
       {/* Subtitle */}
       <View style={styles.subtitleContainer}>
-        <Text style={styles.subtitleText}>{currentSubtitle}</Text>
+        {currentSubtitle ? (
+          <BlurView intensity={40} tint="dark" style={styles.blurWrapper}>
+            <Text style={styles.subtitleText}>{currentSubtitle}</Text>
+          </BlurView>
+        ) : null}
       </View>
 
       {/* Continue button */}
@@ -116,26 +126,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#A1CEDC" },
   subtitleContainer: {
     position: "absolute",
-    bottom: 200,
+    bottom: 150,
     width: "100%",
     alignItems: "center",
     paddingHorizontal: 20,
   },
+  blurWrapper: {
+    borderRadius: 20,
+    overflow: "hidden",
+    padding: 15,
+    maxWidth: "100%",
+  },
   subtitleText: {
-    color: "#5a9d9d",
+    color: "#fff",
     fontSize: 20,
     textAlign: "center",
     fontWeight: "bold",
-    backgroundColor: "rgba(0, 0, 0, 0)",
-    padding: 10,
-    borderRadius: 10,
   },
   buttonContainer: {
     position: "absolute",
-    bottom: 100,
+    bottom: 175,
     width: "100%",
     alignItems: "center",
-    paddingBottom: 100,
+  
   },
   button: {
     backgroundColor: "#4AC3FF",
@@ -147,5 +160,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+  },
+  skipButtonContainer: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    zIndex: 2,
+  },
+  skipButton: {
+    backgroundColor: "rgba(0,0,0,0.3)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  skipText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

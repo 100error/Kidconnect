@@ -228,8 +228,8 @@ const Home = () => {
                 progress={overallProgress / 100}
                 showsText={true}
                 formatText={() => `${Math.round(overallProgress)}%`}
-                color="rgb(64, 213, 247)"
-                unfilledColor="rgba(255,255,255,0.3)"
+                color="rgb(29, 153, 181)"
+                unfilledColor="rgba(255, 255, 255, 0.17)"
                 borderWidth={2}
                 thickness={6}
                 textStyle={{ fontWeight: "bold", fontSize: 16 }}
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '90%',
     maxHeight: '80%',
-    backgroundColor: '#fff',
+    backgroundColor: '#eef7f9',
     borderRadius: 25,
     padding: 20,
     elevation: 5,
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
   },
   historyItem: {
     marginBottom: 15,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#b0e9f3c2',
     padding: 15,
     borderRadius: 15,
   },
@@ -414,13 +414,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 20,
-    backgroundColor: '#eee',
+    backgroundColor: '#ffffffc2',
     borderRadius: 10,
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#4AC3FF',
+    backgroundColor: '#91daff',
   },
   historyScore: {
     position: 'absolute',

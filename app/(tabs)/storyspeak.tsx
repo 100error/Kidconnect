@@ -1,13 +1,13 @@
 import { ensureMicPermission } from "@/services/mic";
 import { addResult } from "@/services/progress";
 import { addAttempt } from "@/services/speechlog";
+import { speechService } from "@/services/speechService";
 import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import Voice from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Story = {
@@ -15,8 +15,6 @@ type Story = {
   target: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
 };
-
-type SpeechResultsEvent = { value?: string[] }; 
 
 function StorySpeak() {
   const router = useRouter();
@@ -36,6 +34,7 @@ function StorySpeak() {
   const [recognizedText, setRecognizedText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
+  const [wordStatus, setWordStatus] = useState<'neutral' | 'correct' | 'incorrect'>('neutral');
 
   const currentStory = stories[currentIndex];
 
@@ -57,38 +56,43 @@ function StorySpeak() {
     }
   };
 
-  const onSpeechResults = useCallback((event: SpeechResultsEvent) => {
-    if (event.value && event.value.length > 0) {
-      const spoken = event.value[0].toLowerCase();
+  const handleSpeechResult = async (result: { transcript: string; confidence: number }) => {
+      const spoken = result.transcript.toLowerCase();
       setRecognizedText(spoken);
 
       // Check if the spoken text contains the target word
-      if (spoken.includes(currentStory.target.toLowerCase())) {
+      if (speechService.checkWord(result, currentStory.target)) {
+        setWordStatus('correct');
         playSound('correct');
         speakPraise(`Great reading! You read ${currentStory.target} correctly.`);
         addAttempt({ activityId: "storyspeak", text: spoken, success: true });
         
-        Alert.alert('✅ Correct!', `You read the word “${currentStory.target}”!`, [
-          {
-            text: currentIndex < stories.length - 1 ? 'Next' : 'Finish',
-            onPress: async () => {
-              if (currentIndex < stories.length - 1) {
-                setCurrentIndex(currentIndex + 1);
-                setRecognizedText('');
-              } else {
-                setGameCompleted(true);
-                await addResult({
-                  activityId: "storyspeak",
-                  category: "game",
-                  score: 100,
-                  maxScore: 100,
-                  completed: true,
-                });
-              }
+        // Delay alert slightly to show visual feedback
+        setTimeout(() => {
+          Alert.alert('✅ Correct!', `You read the word “${currentStory.target}”!`, [
+            {
+              text: currentIndex < stories.length - 1 ? 'Next' : 'Finish',
+              onPress: async () => {
+                if (currentIndex < stories.length - 1) {
+                  setCurrentIndex(currentIndex + 1);
+                  setRecognizedText('');
+                  setWordStatus('neutral');
+                } else {
+                  setGameCompleted(true);
+                  await addResult({
+                    activityId: "storyspeak",
+                    category: "game",
+                    score: 100,
+                    maxScore: 100,
+                    completed: true,
+                  });
+                }
+              },
             },
-          },
-        ]);
+          ]);
+        }, 500);
       } else {
+        setWordStatus('incorrect');
         playSound('wrong');
         speakCorrection(`Try again. Read the word ${currentStory.target}.`);
         addAttempt({ activityId: "storyspeak", text: spoken, success: false });
@@ -104,42 +108,54 @@ function StorySpeak() {
           },
         ]);
       }
-    }
-  }, [currentStory, currentIndex, stories]);
+  };
 
   useEffect(() => {
     ensureMicPermission();
 
-    Voice.onSpeechResults = onSpeechResults;
-    Voice.onSpeechEnd = () => setIsListening(false);
-    Voice.onSpeechError = (e) => {
-      setIsListening(false);
-      console.error(e);
-    };
-
     return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
+       if (isListening) {
+         speechService.stopRecording();
+       }
     };
-  }, [onSpeechResults]);
+  }, [isListening]);
 
   const startListening = async () => {
+    if (isListening) return; // Prevent double start
+
     try {
       const allowed = await ensureMicPermission();
       if (!allowed) return;
+      
       setRecognizedText('');
+      setWordStatus('neutral');
       setIsListening(true);
-      await Voice.start('en-US');
+      
+      const started = await speechService.startRecording();
+      if (!started) {
+        setIsListening(false);
+        Alert.alert("Error", "Could not start microphone");
+      }
     } catch (e) {
       console.error('Start error:', e);
+      setIsListening(false);
     }
   };
 
   const stopListening = async () => {
+    if (!isListening) return; // Prevent double stop
+
     try {
-      await Voice.stop();
       setIsListening(false);
+      const uri = await speechService.stopRecording();
+      
+      if (uri) {
+        const result = await speechService.recognizeSpeech(uri);
+        handleSpeechResult(result);
+      }
     } catch (e) {
       console.error('Stop error:', e);
+      setIsListening(false);
     }
   };
 
@@ -156,7 +172,15 @@ function StorySpeak() {
       <Text style={styles.storyText}>
         {parts.map((part, index) => 
           part.toLowerCase() === currentStory.target.toLowerCase() ? (
-            <Text key={index} style={styles.highlightedWord} onPress={startListening}>
+            <Text 
+              key={index} 
+              style={[
+                styles.highlightedWord,
+                wordStatus === 'correct' && styles.wordCorrect,
+                wordStatus === 'incorrect' && styles.wordIncorrect
+              ]} 
+              onPress={startListening}
+            >
               {part}
             </Text>
           ) : (
@@ -308,14 +332,23 @@ const styles = StyleSheet.create({
   storyText: {
     fontSize: 32,
     textAlign: 'center',
-    color: '#D32F2F', // Red text for sentence
+    color: '#333', // Dark text for sentence
     fontWeight: 'bold',
     lineHeight: 40,
   },
   highlightedWord: {
-    color: '#D32F2F', 
+    color: '#1976D2', // Blue for target word
     textDecorationLine: 'underline',
-    backgroundColor: '#FFEBEE', // Subtle highlight background
+    backgroundColor: '#E3F2FD', 
+  },
+  wordCorrect: {
+    color: '#2E7D32',
+    backgroundColor: '#E8F5E9',
+    textDecorationLine: 'none',
+  },
+  wordIncorrect: {
+    color: '#C62828',
+    backgroundColor: '#FFEBEE',
   },
   contentRow: {
     flexDirection: 'row',

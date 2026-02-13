@@ -3,10 +3,11 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, ImageBackground, StyleSheet, View } from "react-native";
+import { settingsService } from "@/services/settings";
 
 const { width } = Dimensions.get("window");
 
-export default function Start() {
+export default function Index() {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const lineAnim = useRef(new Animated.Value(0)).current;
 
@@ -14,24 +15,39 @@ export default function Start() {
     let soundInstance: Audio.Sound | null = null;
 
     async function startLoading() {
-      const { sound: bgSound } = await Audio.Sound.createAsync(
-        require("../assets/music/fun.mp3"),
-        { shouldPlay: true, isLooping: true }
-      );
-      await bgSound.playAsync();
-      setSound(bgSound);
-      soundInstance = bgSound;
+      // Start checking settings in parallel with animation/sound setup
+      const hasSeenWelcomePromise = settingsService.hasSeenWelcome();
+
+      try {
+        const { sound: bgSound } = await Audio.Sound.createAsync(
+          require("../assets/music/fun.mp3"),
+          { shouldPlay: true, isLooping: true }
+        );
+        await bgSound.playAsync();
+        setSound(bgSound);
+        soundInstance = bgSound;
+      } catch (e) {
+        console.log("Error loading sound", e);
+      }
 
       Animated.timing(lineAnim, {
         toValue: width * 0.8,
-        duration: 5000,
+        duration: 3000,
         useNativeDriver: false,
-      }).start(() => {
+      }).start(async () => {
         if (soundInstance) {
-          soundInstance.stopAsync();
-          soundInstance.unloadAsync();
+          try {
+            await soundInstance.stopAsync();
+            await soundInstance.unloadAsync();
+          } catch (e) { console.log("Error stopping sound", e); }
         }
-        router.replace("/intro"); // relative path
+        
+        const hasSeenWelcome = await hasSeenWelcomePromise;
+        if (hasSeenWelcome) {
+          router.replace("/home");
+        } else {
+          router.replace("/intro");
+        }
       });
     }
 

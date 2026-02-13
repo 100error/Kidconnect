@@ -1,5 +1,5 @@
+import { speechService } from '@/services/speechService';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Voice, { SpeechErrorEvent, SpeechResultsEvent } from '@react-native-voice/voice';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -166,25 +166,12 @@ export default function OddWordOutScreen() {
 
   // --- Voice Setup ---
   useEffect(() => {
-    Voice.onSpeechResults = onSpeechResults;
-    Voice.onSpeechError = onSpeechError;
     return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
+      if (isListening) {
+        speechService.stopRecording();
+      }
     };
-  }, [selectedOption]);
-
-  const onSpeechResults = (e: SpeechResultsEvent) => {
-    setIsListening(false);
-    const spokenText = e.value?.[0] || '';
-    handlePronunciationCheck(spokenText);
-  };
-
-  const onSpeechError = (e: SpeechErrorEvent) => {
-    setIsListening(false);
-    setFeedbackMessage('Could not hear you. Try again.');
-    setFeedbackType('error');
-    speak('Could not hear you. Try again.');
-  };
+  }, [isListening]);
 
   // --- Game Logic ---
 
@@ -196,8 +183,23 @@ export default function OddWordOutScreen() {
     speak(`Now say ${option.word}`);
   };
 
-  const startListening = async () => {
+  const handleMicPress = () => {
+    if (isListening) {
+      handleStopAndEvaluate();
+    } else {
+      toggleListening();
+    }
+  };
+
+  const toggleListening = async () => {
     if (!selectedOption) return;
+
+    if (isListening) {
+      // Prevent double stop if already processing
+      return; 
+    }
+
+    // Start
     const allowed = await ensureMicPermission();
     if (!allowed) {
       setFeedbackMessage('Microphone permission needed.');
@@ -207,31 +209,61 @@ export default function OddWordOutScreen() {
     try {
       setFeedbackMessage('Listening...');
       setIsListening(true);
-      await Voice.start('en-US');
+      await speechService.startRecording();
     } catch (e) {
       console.error(e);
       setIsListening(false);
     }
   };
 
-  const handlePronunciationCheck = (spokenText: string) => {
+  const handleStopAndEvaluate = async () => {
+     if (!isListening) return;
+
+     setIsListening(false);
+     try {
+       const uri = await speechService.stopRecording();
+       if (uri) {
+          const result = await speechService.recognizeSpeech(uri);
+          handlePronunciationCheck(result);
+       }
+     } catch (e) {
+       console.error(e);
+       setFeedbackMessage('Could not hear you. Try again.');
+       setFeedbackType('error');
+     }
+  };
+
+  const handlePronunciationCheck = (result: { transcript: string; confidence: number }) => {
     if (!selectedOption) return;
 
-    const target = selectedOption.word.toLowerCase();
-    const spoken = spokenText.toLowerCase();
-    
-    // Check if spoken text contains the target word
-    if (spoken.includes(target) || spoken === target) {
-      if (selectedOption.isOdd) {
-        handleCorrectAnswer();
-      } else {
-        handleWrongChoice();
-      }
-    } else {
-      setFeedbackMessage(`Did you say "${selectedOption.word}"? Try again.`);
+    const target = selectedOption.word
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .trim();
+
+    const spoken = result.transcript
+      ?.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .trim();
+
+    console.log("Spoken:", spoken, "Target:", target, "Confidence:", result.confidence);
+
+    // 1️⃣ First: pronunciation check ONLY
+    const pronouncedCorrectly = speechService.checkWord(result, target);
+
+    if (!pronouncedCorrectly) {
+      setFeedbackMessage(`Try again. Say "${selectedOption.word}"`);
       setFeedbackType('error');
       playSound('wrong');
       speak(`Try again. Say ${selectedOption.word}`);
+      return;
+    }
+
+    // 2️⃣ Then: game logic
+    if (selectedOption.isOdd) {
+      handleCorrectAnswer();
+    } else {
+      handleWrongChoice();
     }
   };
 
@@ -377,8 +409,7 @@ export default function OddWordOutScreen() {
             {selectedOption && !showResultModal && (
               <TouchableOpacity
                 style={[styles.micButton, isListening && styles.micActive]}
-                onPress={startListening}
-                disabled={isListening}
+                onPress={handleMicPress}
               >
                 <Ionicons 
                   name={isListening ? "mic" : "mic-outline"} 

@@ -4,6 +4,8 @@ import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+import { settingsService } from "@/services/settings";
+
 export default function Intro() {
   const videoRef = useRef<Video>(null);
   const [audio, setAudio] = useState<Audio.Sound | null>(null);
@@ -73,10 +75,12 @@ export default function Intro() {
         await audio.unloadAsync();
         setAudio(null);
       }
-      router.push("/home");
+      await settingsService.setHasSeenWelcome(true);
+      router.replace("/home");
     } catch (error) {
       console.log("Error stopping audio:", error);
-      router.push("/home");
+      await settingsService.setHasSeenWelcome(true);
+      router.replace("/home");
     }
   };
 

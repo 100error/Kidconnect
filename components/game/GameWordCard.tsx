@@ -1,5 +1,5 @@
-import { Recognition } from "@/services/audio/recognition";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
@@ -29,7 +29,9 @@ export default function GameWordCard({
 
   useEffect(() => {
     return () => {
-      if (isListening) Recognition.stop();
+      if (isListening) {
+          speechService.stopRecording();
+      }
     };
   }, [isListening]);
 
@@ -39,53 +41,64 @@ export default function GameWordCard({
     }
   };
 
+  const verifySpeech = async (uri: string) => {
+    try {
+        const result = await speechService.recognizeSpeech(uri);
+        console.log(`Recognized: ${result.transcript} (Conf: ${result.confidence}) vs Target: ${word}`);
+        
+        if (speechService.checkWord(result, word)) {
+            setFeedback("correct");
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            TTS.speak("Good job!");
+            if (onSuccess) onSuccess();
+        } else {
+            setFeedback("incorrect");
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            TTS.speak("Try again");
+            if (onFailure) onFailure();
+            setTimeout(() => setFeedback("idle"), 1500);
+        }
+    } catch (e) {
+        console.log("Recognition error:", e);
+        setFeedback("incorrect");
+        if (onFailure) onFailure();
+        setTimeout(() => setFeedback("idle"), 1500);
+    }
+  };
+
   const toggleListening = async () => {
     if (disabled || feedback === "correct") return;
 
     if (isListening) {
-      await Recognition.stop();
+      // Stop
       setIsListening(false);
-      setFeedback("idle");
+      try {
+        const uri = await speechService.stopRecording();
+        if (uri) {
+            await verifySpeech(uri); // await ensures we process before resetting completely if needed
+        } else {
+            setFeedback("idle");
+        }
+      } catch (e) {
+        setFeedback("idle");
+      }
       return;
     }
 
-    const hasPermission = await Recognition.requestPermission();
-    if (!hasPermission) return;
-
-    setFeedback("listening");
-    setIsListening(true);
-    Haptics.selectionAsync();
-
+    // Start
     try {
-        await Recognition.start(
-            (text) => {
-                console.log(`Recognized: ${text} vs Target: ${word}`);
-                // Simple fuzzy match
-                if (text.toLowerCase().includes(word.toLowerCase())) {
-                    setFeedback("correct");
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    TTS.speak("Good job!");
-                    if (onSuccess) onSuccess();
-                } else {
-                    setFeedback("incorrect");
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                    TTS.speak("Try again");
-                    if (onFailure) onFailure();
-                    // Reset after a delay
-                    setTimeout(() => {
-                        setFeedback("idle");
-                    }, 1500);
-                }
-                setIsListening(false);
-            },
-            (error) => {
-                console.log("Recognition error:", error);
-                setFeedback("incorrect");
-                if (onFailure) onFailure();
-                setIsListening(false);
-                setTimeout(() => setFeedback("idle"), 1500);
-            }
-        );
+        const hasPermission = await speechService.requestPermissions();
+        if (!hasPermission) return;
+
+        setFeedback("listening");
+        setIsListening(true);
+        Haptics.selectionAsync();
+        
+        const started = await speechService.startRecording();
+        if (!started) {
+            setIsListening(false);
+            setFeedback("idle");
+        }
     } catch (e) {
         setIsListening(false);
         setFeedback("idle");

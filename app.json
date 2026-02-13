@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Kid",
+    "name": "KidConnect",
     "slug": "Kid",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/dongggg.png",
     "scheme": "kid",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,9 +14,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/dongggg.png",
+        "backgroundImage": "./assets/images/dongggg.png",
+        "monochromeImage": "./assets/images/dongggg.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -44,7 +44,7 @@
           }
         }
       ],
-      "expo-audio"
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

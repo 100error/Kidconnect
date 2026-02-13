@@ -1,64 +1,27 @@
-import Voice, {
-  SpeechErrorEvent,
-  SpeechResultsEvent,
-} from "@react-native-voice/voice";
-import { PermissionsAndroid, Platform } from "react-native";
+// Deprecated: Replaced by services/speechService.ts
+// This file is kept for reference but should not be used.
+// The @react-native-voice/voice dependency has been removed.
+
 
 export const Recognition = {
   requestPermission: async (): Promise<boolean> => {
-    if (Platform.OS !== "android") return true;
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        {
-          title: "Microphone Permission",
-          message: "App needs access to your microphone for speech games.",
-          buttonNeutral: "Ask Me Later",
-          buttonNegative: "Cancel",
-          buttonPositive: "OK",
-        }
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn(err);
-      return false;
-    }
+    console.warn("Recognition.requestPermission is deprecated. Use speechService instead.");
+    return false;
   },
 
   start: async (
     onResult: (text: string) => void,
     onError: (error: any) => void
   ) => {
-    try {
-      await Voice.stop();
-      Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-        const text = e.value?.[0] || "";
-        onResult(text);
-      };
-      Voice.onSpeechError = (e: SpeechErrorEvent) => {
-        onError(e);
-      };
-      await Voice.start("en-US");
-    } catch (e) {
-      onError(e);
-    }
+    console.warn("Recognition.start is deprecated. Use speechService instead.");
+    onError(new Error("Deprecated"));
   },
 
   stop: async () => {
-    try {
-      await Voice.stop();
-      Voice.removeAllListeners();
-    } catch (e) {
-      console.error(e);
-    }
+    console.warn("Recognition.stop is deprecated. Use speechService instead.");
   },
 
   destroy: async () => {
-    try {
-      await Voice.destroy();
-      Voice.removeAllListeners();
-    } catch (e) {
-      console.error(e);
-    }
+    console.warn("Recognition.destroy is deprecated. Use speechService instead.");
   },
 };

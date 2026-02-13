@@ -3,7 +3,7 @@ import { addResult } from "@/services/progress";
 import { addAttempt } from "@/services/speechlog";
 import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import { Ionicons } from "@expo/vector-icons";
-import Voice, { SpeechErrorEvent, SpeechResultsEvent } from "@react-native-voice/voice";
+import { speechService } from "@/services/speechService";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -31,10 +31,9 @@ export default function WordPronounce() {
     await ensureMicPermission();
   }, []);
 
-  const onSpeechResults = useCallback(
-    async (event: SpeechResultsEvent) => {
-      const spoken = event.value?.[0]?.toLowerCase() || "";
-      if (spoken.includes(currentWord.toLowerCase())) {
+  const handleSpeechResult = async (result: { transcript: string; confidence: number }) => {
+      const spoken = result.transcript.toLowerCase();
+      if (speechService.checkWord(result, currentWord)) {
         setFeedback("✅ Correct! Great job!");
         setScore((s) => s + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -55,35 +54,32 @@ export default function WordPronounce() {
         await addAttempt({ activityId: "wordpronounce", text: spoken, success: false });
       }
       setIsListening(false);
-    },
-    [currentWord]
-  );
-
-  const onSpeechError = useCallback((event: SpeechErrorEvent) => {
-    setFeedback("❌ Couldn't understand. Try again.");
-    setIsListening(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-  }, []);
+  };
 
   const startListening = async () => {
-    if (isListening) return;
-
-    try {
       const allowed = await ensureMicPermission();
       if (!allowed) return;
-      setFeedback("🎤 Listening...");
-      setIsListening(true);
-      await Voice.start("en-US");
-    } catch {
-      setIsListening(false);
-    }
+      
+      try {
+        setFeedback("🎤 Listening...");
+        setIsListening(true);
+        await speechService.startRecording();
+      } catch {
+        setIsListening(false);
+      }
   };
 
   const stopListening = async () => {
-    try {
-      await Voice.stop();
-    } catch {
-    }
+      setIsListening(false);
+      try {
+        const uri = await speechService.stopRecording();
+        if (uri) {
+           const result = await speechService.recognizeSpeech(uri);
+           handleSpeechResult(result);
+        }
+      } catch {
+        setFeedback("❌ Couldn't understand.");
+      }
   };
 
   const nextWord = () => {
@@ -92,13 +88,12 @@ export default function WordPronounce() {
 
   useEffect(() => {
     requestMicPermission();
-    Voice.onSpeechResults = onSpeechResults;
-    Voice.onSpeechError = onSpeechError;
-    Voice.onSpeechEnd = () => setIsListening(false);
     return () => {
-      Voice.destroy().then(Voice.removeAllListeners);
+       if (isListening) {
+         speechService.stopRecording();
+       }
     };
-  }, [requestMicPermission, onSpeechResults, onSpeechError]);
+  }, [isListening]);
 
   return (
     <LinearGradient colors={["#E1F5FE", "#FFF3E0"]} style={styles.container}>

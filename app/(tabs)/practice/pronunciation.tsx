@@ -1,19 +1,14 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import InstructionModal from "@/components/InstructionModal";
-import { checkInstructionSeen, markInstructionSeen } from "@/services/instructions";
+import { useInstruction } from '@/hooks/useInstruction';
 import { addResult } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
-import { Dimensions, FlatList, Modal, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { vowelSections } from "../common";
-
-const { width } = Dimensions.get("window");
-const CARD_MARGIN = 6;
-// Calculate card size for 3 columns
-const CARD_SIZE = (width - 40 - (CARD_MARGIN * 6)) / 3;
 
 interface CardItem {
   id: string;
@@ -26,6 +21,13 @@ interface CardItem {
 }
 
 export default function PracticePronunciation() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 5 : 3;
+  const GAP = 10;
+  const PADDING = 20;
+  const cardSize = (width - (PADDING * 2) - (GAP * (numColumns - 1))) / numColumns;
+
   const router = useRouter();
   const [restartCount, setRestartCount] = useState(0);
   const [cards, setCards] = useState<CardItem[]>([]);
@@ -33,13 +35,21 @@ export default function PracticePronunciation() {
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showInstruction, setShowInstruction] = useState(false);
 
-  useEffect(() => {
-    checkInstructionSeen('pronunciation').then(seen => {
-      if (!seen) setShowInstruction(true);
-    });
-  }, []);
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'pronunciation',
+    "Tap matching pairs! Find the picture and the word that goes with it."
+  );
+
+  // Stop audio on unmount/blur
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
 
   // Pastel colors palette
   const cardColors = [
@@ -104,7 +114,8 @@ export default function PracticePronunciation() {
     if (isProcessing || card.state === 'matched' || card.state === 'selected') return;
 
     // Play TTS on tap (optional but helpful)
-    Speech.speak(card.word, { rate: 1.0 });
+    Speech.stop();
+    Speech.speak(card.word, { rate: 0.85 });
 
     if (!selectedId) {
       // First card selected
@@ -125,7 +136,7 @@ export default function PracticePronunciation() {
           setCards(prev => prev.map(c => 
             c.matchKey === card.matchKey ? { ...c, state: 'matched' } : c
           ));
-          Speech.speak("Good job!", { rate: 1.1 });
+          Speech.speak("Good job!", { rate: 0.9 });
           setSelectedId(null);
           setIsProcessing(false);
           checkCompletion();
@@ -136,7 +147,8 @@ export default function PracticePronunciation() {
           setCards(prev => prev.map(c => 
             c.id === firstCard.id || c.id === card.id ? { ...c, state: 'mismatch' } : c
           ));
-          Speech.speak("Try again", { rate: 1.0 });
+          Speech.stop();
+          Speech.speak("Try again", { rate: 0.85 });
           setMistakes(prev => new Set(prev).add(firstCard.matchKey).add(card.matchKey));
         }, 500);
 
@@ -182,7 +194,7 @@ export default function PracticePronunciation() {
     });
 
     setShowResult(true);
-    Speech.speak(passed ? "Awesome! You did it!" : "Good practice! Try again.", { rate: 0.95 });
+    Speech.speak(passed ? "Awesome! You did it!" : "Good practice! Try again.", { rate: 0.85 });
   };
 
   const handleRestart = () => {
@@ -201,6 +213,7 @@ export default function PracticePronunciation() {
         {/* Header */}
         <View style={styles.header}>
           <BackButton targetRoute="/pract" color="#00695C" />
+          <InstructionButton onPress={playInstruction} style={{ marginRight: 10 }} />
           <Text style={styles.title}>Match Pairs</Text>
           <View style={styles.scoreBadge}>
              {/* Show matched pairs count */}
@@ -216,15 +229,18 @@ export default function PracticePronunciation() {
         <FlatList
           data={cards}
           keyExtractor={(item) => item.id}
-          numColumns={3}
+          key={numColumns} // Force re-render on column change
+          numColumns={numColumns}
           contentContainerStyle={styles.listContainer}
-          columnWrapperStyle={styles.columnWrapper}
+          columnWrapperStyle={[styles.columnWrapper, { gap: GAP }]}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
                 styles.card,
                 { 
+                  width: cardSize,
+                  height: cardSize,
                   backgroundColor: item.state === 'matched' ? '#E8F5E9' : item.color,
                   borderColor: item.state === 'selected' ? '#2196F3' : 
                                item.state === 'mismatch' ? '#F44336' : 
@@ -290,17 +306,6 @@ export default function PracticePronunciation() {
             </View>
           </View>
         </Modal>
-
-        <InstructionModal
-          visible={showInstruction}
-          onClose={() => {
-            setShowInstruction(false);
-            markInstructionSeen('pronunciation');
-          }}
-          instructionText={`Tap a card to hear the word.\nMatch the picture with the correct word.\nHave fun learning!`}
-          iconName="mic"
-        />
-
       </SafeAreaView>
     </LinearGradient>
   );
@@ -312,6 +317,39 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#00695C",
+    textAlign: "center",
+    flex: 1,
+  },
+  scoreBadge: {
+    backgroundColor: "#B2DFDB",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  scoreText: {
+    fontWeight: "bold",
+    color: "#00695C",
+  },
+  subtitle: {
+    textAlign: "center",
+    fontSize: 18,
+    color: "#004D40",
+    marginBottom: 10,
+    fontWeight: "600",
+  },
+  backgroundImage: {
+    flex: 1,
+    resizeMode: "cover",
+  },
+  gradientOverlay: {
+    flex: 1,
+    paddingTop: Platform.OS === "android" ? 40 : 0,
   },
   header: {
     flexDirection: "row",
@@ -320,48 +358,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#00695C",
-  },
-  scoreBadge: {
-    backgroundColor: "rgba(255,255,255,0.8)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  progressContainer: {
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "#00695C",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  scoreText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#00695C",
-  },
-  subtitle: {
-    textAlign: "center",
+  progressText: {
     fontSize: 18,
-    color: "#00796B",
-    marginBottom: 10,
-    fontWeight: "600",
+    fontWeight: "bold",
+    color: "#F57C00",
+  },
+  gridContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
   },
   listContainer: {
-    padding: 20,
     paddingBottom: 40,
-    alignItems: 'center',
+    gap: 10,
   },
   columnWrapper: {
-    justifyContent: "center", // Center columns
-    gap: CARD_MARGIN,
+    justifyContent: "flex-start",
   },
   card: {
-    width: CARD_SIZE,
-    height: CARD_SIZE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: CARD_MARGIN,
     borderWidth: 3,
+    borderColor: "#FFF3E0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -390,6 +420,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: "85%",
+    maxWidth: 500,
     backgroundColor: "white",
     borderRadius: 25,
     padding: 25,

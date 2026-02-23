@@ -4,13 +4,21 @@ const SETTINGS_FILE = `${FileSystem.documentDirectory || FileSystem.cacheDirecto
 
 export interface Settings {
   hasSeenWelcome: boolean;
+  soundEnabled: boolean;
+  musicEnabled: boolean;
 }
 
 const defaultSettings: Settings = {
   hasSeenWelcome: false,
+  soundEnabled: true,
+  musicEnabled: true,
 };
 
+type SettingsListener = (settings: Settings) => void;
+
 export const settingsService = {
+  listeners: [] as SettingsListener[],
+
   async getSettings(): Promise<Settings> {
     try {
       const fileInfo = await FileSystem.getInfoAsync(SETTINGS_FILE);
@@ -20,7 +28,9 @@ export const settingsService = {
       }
 
       const content = await FileSystem.readAsStringAsync(SETTINGS_FILE);
-      return JSON.parse(content) as Settings;
+      const settings = JSON.parse(content);
+      // Merge with default to ensure new keys exist
+      return { ...defaultSettings, ...settings };
     } catch (error) {
       console.error('Error reading settings:', error);
       return defaultSettings;
@@ -30,6 +40,7 @@ export const settingsService = {
   async saveSettings(settings: Settings): Promise<void> {
     try {
       await FileSystem.writeAsStringAsync(SETTINGS_FILE, JSON.stringify(settings));
+      this.notifyListeners(settings);
     } catch (error) {
       console.error('Error saving settings:', error);
     }
@@ -41,8 +52,42 @@ export const settingsService = {
     await this.saveSettings(settings);
   },
 
+  async setSoundEnabled(value: boolean): Promise<void> {
+    const settings = await this.getSettings();
+    settings.soundEnabled = value;
+    await this.saveSettings(settings);
+  },
+
+  async setMusicEnabled(value: boolean): Promise<void> {
+    const settings = await this.getSettings();
+    settings.musicEnabled = value;
+    await this.saveSettings(settings);
+  },
+
   async hasSeenWelcome(): Promise<boolean> {
     const settings = await this.getSettings();
     return settings.hasSeenWelcome;
+  },
+
+  async isSoundEnabled(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings.soundEnabled;
+  },
+
+  async isMusicEnabled(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings.musicEnabled;
+  },
+
+  addListener(listener: SettingsListener) {
+    this.listeners.push(listener);
+  },
+
+  removeListener(listener: SettingsListener) {
+    this.listeners = this.listeners.filter(l => l !== listener);
+  },
+
+  notifyListeners(settings: Settings) {
+    this.listeners.forEach(l => l(settings));
   }
 };

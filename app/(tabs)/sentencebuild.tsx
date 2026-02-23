@@ -1,26 +1,26 @@
-import InstructionModal from "@/components/InstructionModal";
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import { checkInstructionSeen, markInstructionSeen } from "@/services/instructions";
+import { useInstruction } from '@/hooks/useInstruction';
 import { addResult } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Dimensions,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions
 } from "react-native";
 
 // 1. Data Setup (Tenses: Present, Past, Future)
-const rawData = [
+const staticRawData = [
   { id: "1", sentence: "I ___ with my friends.", answer: "play" },
   { id: "2", sentence: "She ___ to school yesterday.", answer: "walked" },
   { id: "3", sentence: "We will ___ to the zoo.", answer: "go" },
@@ -33,30 +33,47 @@ const rawData = [
   { id: "10", sentence: "\"Hello,\" ___ the teacher.", answer: "said" },
 ];
 
-const { width } = Dimensions.get("window");
-
 export default function SentenceBuild() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
+  const [questions, setQuestions] = useState<typeof staticRawData>([]);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [completedSentences, setCompletedSentences] = useState<{ [key: string]: string }>({}); // id -> word
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
   const [restartCount, setRestartCount] = useState(0);
-  const [showInstruction, setShowInstruction] = useState(false);
 
-  React.useEffect(() => {
-    checkInstructionSeen('sentencebuild').then(seen => {
-      if (!seen) setShowInstruction(true);
-    });
-  }, []);
+  // Randomize questions on mount/restart
+  useEffect(() => {
+    const shuffled = [...staticRawData].sort(() => 0.5 - Math.random());
+    setQuestions(shuffled);
+  }, [restartCount]);
+
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'sentencebuild',
+    "Fill in the blanks! Choose the correct word to complete the sentence."
+  );
+
+  // Stop audio on unmount/blur
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
 
   // Derived state
   const wordBank = React.useMemo(() => {
-    // Get all answers
-    const answers = rawData.map(d => d.answer);
-    // Shuffle them
+    if (questions.length === 0) return [];
+    // Get all answers from the CURRENT shuffled questions
+    const answers = questions.map(d => d.answer);
+    // Shuffle them again for the bank
     return [...answers].sort(() => 0.5 - Math.random());
-  }, [restartCount]);
+  }, [questions]);
 
   // Check if a word is already used in a completed sentence
   const isWordUsed = (word: string) => {
@@ -65,16 +82,20 @@ export default function SentenceBuild() {
 
   const handleWordSelect = (word: string) => {
     if (isWordUsed(word)) return;
-    Speech.speak(word);
+    Speech.speak(word, { rate: 0.85 });
     setSelectedWord(word === selectedWord ? null : word);
   };
 
-  const handleSentencePress = (item: typeof rawData[0]) => {
+  const handleSentencePress = (item: typeof staticRawData[0]) => {
     // If already completed, ignore
     if (completedSentences[item.id]) return;
 
     if (!selectedWord) {
-      Speech.speak("Please select a word first.");
+      // READ ALOUD Requirement: Read the sentence if tapped without selection
+      // Replace ___ with "blank" for audio
+      const textToRead = item.sentence.replace("___", "blank");
+      Speech.stop();
+      Speech.speak(textToRead, { rate: 0.85, pitch: 1.1 });
       return;
     }
 
@@ -83,15 +104,17 @@ export default function SentenceBuild() {
       const newCompleted = { ...completedSentences, [item.id]: selectedWord };
       setCompletedSentences(newCompleted);
       setSelectedWord(null);
-      Speech.speak("Good job!");
+      Speech.stop();
+      Speech.speak("Good job!", { rate: 0.95 });
       
       // Check completion
-      if (Object.keys(newCompleted).length === rawData.length) {
+      if (Object.keys(newCompleted).length === questions.length) {
         setTimeout(finishGame, 1000);
       }
     } else {
       // Incorrect
-      Speech.speak("Try again.");
+      Speech.stop();
+      Speech.speak("Try again.", { rate: 0.95 });
       setMistakes(prev => new Set(prev).add(item.id));
     }
   };
@@ -131,12 +154,15 @@ export default function SentenceBuild() {
 
         {/* 1. Header Section */}
         <View style={styles.header}>
-          <BackButton targetRoute="/pract" color="#E65100" />
+          <View style={styles.headerLeft}>
+            <BackButton targetRoute="/pract" color="#E65100" />
+            <InstructionButton onPress={playInstruction} style={{ marginLeft: 10 }} />
+          </View>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Sentence Building</Text>
             <Ionicons name="pencil" size={24} color="#E65100" style={styles.headerIcon} />
           </View>
-          <View style={{ width: 40 }} /> 
+          <View style={styles.headerRight} /> 
         </View>
 
         {/* 2. Instruction Section */}
@@ -173,8 +199,8 @@ export default function SentenceBuild() {
           </View>
 
           {/* 4. Sentence List Section */}
-          <View style={styles.worksheetContainer}>
-            {rawData.map((item, index) => {
+          <View style={[styles.worksheetContainer, isTablet && styles.worksheetContainerTablet]}>
+            {questions.map((item, index) => {
               const isCompleted = !!completedSentences[item.id];
               const parts = item.sentence.split("___");
               
@@ -217,7 +243,7 @@ export default function SentenceBuild() {
           visible={showResult}
           transparent={true}
           animationType="fade"
-          onRequestClose={handleExit}
+          onRequestClose={() => setShowResult(false)}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -249,17 +275,6 @@ export default function SentenceBuild() {
             </View>
           </View>
         </Modal>
-
-        <InstructionModal
-          visible={showInstruction}
-          onClose={() => {
-            setShowInstruction(false);
-            markInstructionSeen('sentencebuild');
-          }}
-          instructionText={`Choose a word from the box.\nTap the sentence to complete it.\nLet’s build sentences!`}
-          iconName="construct"
-        />
-
       </SafeAreaView>
     </LinearGradient>
   );
@@ -282,6 +297,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 10,
     borderRadius: 16,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerRight: {
+    width: 40,
   },
   headerTitleContainer: {
     flexDirection: "row",
@@ -373,6 +395,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#FFE0B2",
     minHeight: 400,
+    width: "100%",
+  },
+  worksheetContainerTablet: {
+    maxWidth: 800,
+    alignSelf: "center",
   },
   sentenceRow: {
     flexDirection: "row",
@@ -393,7 +420,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#F57C00",
     marginRight: 12,
-    width: 25,
+    minWidth: 25,
   },
   sentenceTextContainer: {
     flex: 1,

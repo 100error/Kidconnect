@@ -1,14 +1,14 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import InstructionModal from "@/components/InstructionModal";
-import { checkInstructionSeen, markInstructionSeen } from "@/services/instructions";
+import { useInstruction } from '@/hooks/useInstruction';
 import { addResult } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useMemo, useState } from "react";
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 type SentenceItem = {
   id: string;
@@ -21,20 +21,55 @@ type SentenceItem = {
 
 export default function Fixsentence() {
   const router = useRouter();
-  const sentenceData: SentenceItem[] = useMemo(
-    () => [
-      { id: "1", jumbled: "dog The brown is fast", correct: "The brown dog is fast.", icon: "paw" },
-      { id: "2", jumbled: "ate I banana a", correct: "I ate a banana.", icon: "nutrition" },
-      { id: "3", jumbled: "blue The sky is", correct: "The sky is blue.", icon: "cloud" },
-      { id: "4", jumbled: "runs boy The fast very", correct: "The boy runs very fast.", icon: "walk" },
-      { id: "5", jumbled: "cat The sleeping is", correct: "The cat is sleeping.", icon: "bed" },
-      { id: "6", jumbled: "book reading I am a", correct: "I am reading a book.", icon: "book" },
-      { id: "7", jumbled: "sun The hot is", correct: "The sun is hot.", icon: "sunny" },
-      { id: "8", jumbled: "ball playing They are with a", correct: "They are playing with a ball.", icon: "football" },
-      { id: "9", jumbled: "school to go I", correct: "I go to school.", icon: "school" },
-      { id: "10", jumbled: "happy very am I", correct: "I am very happy.", icon: "happy" }
-    ],
-    []
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 20;
+  const padding = 20;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
+  
+  // Static data
+  const rawSentenceData: SentenceItem[] = [
+    { id: "1", jumbled: "dog The brown is fast", correct: "The brown dog is fast.", icon: "paw" },
+    { id: "2", jumbled: "ate I banana a", correct: "I ate a banana.", icon: "nutrition" },
+    { id: "3", jumbled: "blue The sky is", correct: "The sky is blue.", icon: "cloud" },
+    { id: "4", jumbled: "runs boy The fast very", correct: "The boy runs very fast.", icon: "walk" },
+    { id: "5", jumbled: "cat The sleeping is", correct: "The cat is sleeping.", icon: "bed" },
+    { id: "6", jumbled: "book reading I am a", correct: "I am reading a book.", icon: "book" },
+    { id: "7", jumbled: "sun The hot is", correct: "The sun is hot.", icon: "sunny" },
+    { id: "8", jumbled: "ball playing They are with a", correct: "They are playing with a ball.", icon: "football" },
+    { id: "9", jumbled: "school to go I", correct: "I go to school.", icon: "school" },
+    { id: "10", jumbled: "happy very am I", correct: "I am very happy.", icon: "happy" }
+  ];
+
+  const [sentenceData, setSentenceData] = useState<SentenceItem[]>([]);
+
+  // Randomize on mount
+  useEffect(() => {
+    const shuffled = [...rawSentenceData].sort(() => 0.5 - Math.random());
+    setSentenceData(shuffled);
+  }, []);
+
+  // Audio Guidance
+  useFocusEffect(
+    React.useCallback(() => {
+      // Play guidance when screen focuses/loads
+      const playGuidance = async () => {
+        // Stop any previous speech first
+        await Speech.stop();
+        // Speak the guidance
+        Speech.speak("These are declarative sentences. Tap the words in the right order to build the sentence.", {
+          rate: 0.8, // Child-friendly slow rate
+          pitch: 1.1, // Slightly higher pitch for kids
+        });
+      };
+
+      playGuidance();
+
+      return () => {
+        Speech.stop();
+      };
+    }, [])
   );
 
 
@@ -45,13 +80,17 @@ export default function Fixsentence() {
   const [feedbackState, setFeedbackState] = useState<Record<string, "correct" | "incorrect" | null>>({});
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
-  const [showInstruction, setShowInstruction] = useState(false);
 
-  React.useEffect(() => {
-    checkInstructionSeen('fixsentence').then(seen => {
-      if (!seen) setShowInstruction(true);
-    });
-  }, []);
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'fixsentence',
+    "Tap the words in the right order to build the sentence!"
+  );
+
+  const playSentence = (text: string) => {
+    Speech.stop();
+    Speech.speak(text, { rate: 0.75, pitch: 1.0 });
+  };
 
   const handleWordSelect = (id: string, word: string) => {
     if (completedIds.includes(id)) return;
@@ -144,11 +183,15 @@ export default function Fixsentence() {
   return (
     <LinearGradient colors={["#E1F5FE", "#FFF3E0"]} style={styles.container}>
       <View style={styles.header}>
-        <BackButton targetRoute="/pract" color="#2D2D2D" />
-        <Text style={styles.title}>Finish the Sentence</Text>
+        <BackButton targetRoute="/pract" color="#0288D1" />
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Fix the Sentence</Text>
+          <Text style={styles.headerSubtitle}>Drag words to correct order</Text>
+        </View>
+        <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { flexDirection: isTablet ? 'row' : 'column', flexWrap: 'wrap', gap: isTablet ? gap : 0 }]} showsVerticalScrollIndicator={false}>
         {sentenceData.map((item) => {
             const currentSelection = selections[item.id] || [];
             const isCompleted = completedIds.includes(item.id);
@@ -157,12 +200,21 @@ export default function Fixsentence() {
             const slots = Array(jumbledWords.length).fill(null);
 
             return (
-                <View key={item.id} style={styles.card}>
+                <View key={item.id} style={[styles.card, { width: cardWidth }]}>
                     {/* Top Section: Image + Sentence Slots */}
                     <View style={styles.cardHeader}>
                         <View style={styles.imageContainer}>
                             <Ionicons name={item.icon} size={40} color="#0288D1" />
                         </View>
+                        
+                        <TouchableOpacity 
+                            style={styles.speakerButton} 
+                            onPress={() => playSentence(item.correct)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="volume-medium" size={24} color="#F57C00" />
+                        </TouchableOpacity>
+
                         <View style={styles.sentenceContainer}>
                              <View style={styles.slotsRow}>
                                 {slots.map((_, idx) => (
@@ -243,7 +295,12 @@ export default function Fixsentence() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={showResult} transparent={true} animationType="fade">
+      <Modal
+        visible={showResult}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowResult(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Practice Complete!</Text>
@@ -278,15 +335,6 @@ export default function Fixsentence() {
           </View>
         </View>
       </Modal>
-      <InstructionModal
-        visible={showInstruction}
-        onClose={() => {
-          setShowInstruction(false);
-          markInstructionSeen('fixsentence');
-        }}
-        instructionText={`Look at the picture.\nFill in the missing word.\nTry your best!`}
-        iconName="build"
-      />
     </LinearGradient>
   );
 }
@@ -296,38 +344,29 @@ const styles = StyleSheet.create({
     flex: 1
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 48, // Increased for safe area
-    paddingBottom: 16,
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFFCC",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 14
-  },
-  backText: {
-    marginLeft: 6,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#2D2D2D"
-  },
-  title: {
+  headerTitleContainer: {
+    alignItems: 'center',
     flex: 1,
-    textAlign: "right",
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#3E2723",
-    paddingLeft: 12
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#666',
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40
+    padding: 20,
+    paddingBottom: 100,
   },
   card: {
     backgroundColor: "#FFFFFF",
@@ -340,7 +379,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     borderWidth: 1,
-    borderColor: "#E0E0E0"
+    borderColor: "#E0E0E0",
+    width: "100%",
+  },
+  cardTablet: {
+    maxWidth: 600,
+    alignSelf: "center",
   },
   cardHeader: {
     flexDirection: "row",
@@ -355,6 +399,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12
+  },
+  speakerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFF3E0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#FFE0B2",
+    alignSelf: "center"
   },
   sentenceContainer: {
     flex: 1,
@@ -445,9 +501,9 @@ const styles = StyleSheet.create({
   },
   resetBtn: {
     backgroundColor: "#F5F5F5",
-    width: 44,
-    height: 44,
-    paddingHorizontal: 0
+    padding: 10,
+    aspectRatio: 1,
+    minWidth: 44,
   },
   checkBtn: {
     backgroundColor: "#4FC3F7",

@@ -1,11 +1,18 @@
+import InstructionButton from "@/components/InstructionButton";
+import OfflineGuard from "@/components/OfflineGuard";
+import BackButton from '@/components/ui/BackButton';
+import { useInstruction } from '@/hooks/useInstruction';
+import { playbackService } from '@/services/audio/playback';
+import { ensureMicPermission } from '@/services/mic';
+import { addResult } from '@/services/progress';
+import { addAttempt } from '@/services/speechlog';
 import { speechService } from '@/services/speechService';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -14,13 +21,9 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from 'react-native';
-
-import BackButton from '@/components/ui/BackButton';
-import { ensureMicPermission } from '@/services/mic';
-import { addResult } from '@/services/progress';
-
 // --- Types ---
 type Option = {
   id: string;
@@ -133,6 +136,17 @@ const TOTAL_QUESTIONS = 10;
 
 export default function OddWordOutScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 4 : 2;
+  const gap = 10;
+  const screenPadding = 16;
+  const cardPadding = 20;
+  const totalPadding = (screenPadding * 2) + (cardPadding * 2);
+  
+  // Responsive calculations
+  const optionWidth = (width - totalPadding - (gap * (numColumns - 1))) / numColumns;
+  const optionHeight = optionWidth * 1.2; // Maintain aspect ratio
 
   // State
   const [currentQIndex, setCurrentQIndex] = useState(0);
@@ -143,35 +157,43 @@ export default function OddWordOutScreen() {
   const [feedbackType, setFeedbackType] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [showResultModal, setShowResultModal] = useState(false);
   
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'oddwordout',
+    "Find the odd one out! Look at the pictures and tap the one that doesn't belong."
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
+
   // Logic helpers
   const currentQuestion = QUESTIONS[currentQIndex];
 
   // Sounds
   const playSound = async (type: 'correct' | 'wrong') => {
-    try {
-      const file = type === 'correct' 
-        ? require('@/assets/music/feedback/correct.mp3')
-        : require('@/assets/music/feedback/wrong.mp3');
-      const { sound } = await Audio.Sound.createAsync(file);
-      await sound.playAsync();
-    } catch (e) {
-      console.log('Sound error', e);
+    if (type === 'correct') {
+      playbackService.playSound('correct');
+    } else {
+      playbackService.playSound('incorrect');
     }
   };
 
   const speak = (text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.9, pitch: 1.1 });
+    Speech.speak(text, { rate: 0.8, pitch: 1.1 });
   };
 
   // --- Voice Setup ---
   useEffect(() => {
     return () => {
-      if (isListening) {
-        speechService.stopRecording();
-      }
+      speechService.stopRecording();
     };
-  }, [isListening]);
+  }, []);
 
   // --- Game Logic ---
 
@@ -251,6 +273,9 @@ export default function OddWordOutScreen() {
     // 1️⃣ First: pronunciation check ONLY
     const pronouncedCorrectly = speechService.checkWord(result, target);
 
+    // Log attempt
+    addAttempt({ activityId: 'oddwordout', text: spoken || '', success: pronouncedCorrectly });
+
     if (!pronouncedCorrectly) {
       setFeedbackMessage(`Try again. Say "${selectedOption.word}"`);
       setFeedbackType('error');
@@ -306,13 +331,11 @@ export default function OddWordOutScreen() {
   };
 
   const saveAndExit = async () => {
-    const finalScore = Math.round((score / TOTAL_QUESTIONS) * 100);
-    
     await addResult({
       activityId: 'oddwordout',
       category: 'game',
-      score: finalScore,
-      maxScore: 100,
+      score: score,
+      maxScore: TOTAL_QUESTIONS,
       completed: true
     });
     
@@ -334,101 +357,98 @@ export default function OddWordOutScreen() {
   return (
     <LinearGradient colors={['#E0F7FA', '#E1F5FE']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        
-        {/* HEADER */}
-        <View style={styles.header}>
-          <BackButton targetRoute="/games" />
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Odd Word Out</Text>
-            <Text style={styles.subtitle}>Tap the word that does not belong.</Text>
-          </View>
-          <View style={{ width: 40 }} /> 
-        </View>
-
-        {/* PROGRESS */}
-        <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>Question {currentQIndex + 1} / {TOTAL_QUESTIONS}</Text>
-          <View style={styles.scoreBadge}>
-             <Ionicons name="star" size={16} color="#FFD700" />
-             <Text style={styles.scoreText}>{score}</Text>
-          </View>
-        </View>
-
-        {/* MAIN CONTENT */}
-        <View style={styles.content}>
-          
-          {/* QUESTION CARD */}
-          <View style={styles.card}>
-            <View style={styles.optionsRow}>
-              {currentQuestion.options.map((opt) => {
-                const isSelected = selectedOption?.id === opt.id;
-                return (
-                  <TouchableOpacity
-                    key={opt.id}
-                    style={[
-                      styles.optionButton,
-                      isSelected && styles.optionSelected
-                    ]}
-                    onPress={() => handleOptionSelect(opt)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.iconCircle}>
-                      <MaterialCommunityIcons 
-                        name={opt.icon as any} 
-                        size={32} 
-                        color={isSelected ? '#FFF' : '#0288D1'} 
-                      />
-                    </View>
-                    <Text style={[
-                      styles.optionText,
-                      isSelected && styles.optionTextSelected
-                    ]}>
-                      {opt.word}
-                    </Text>
-                    {isSelected && (
-                       <View style={styles.checkBadge}>
-                         <Ionicons name="checkmark" size={12} color="#FFF" />
-                       </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+        <OfflineGuard>
+          {/* HEADER */}
+          <View style={styles.header}>
+            <BackButton targetRoute="/games" />
+            <View style={styles.headerContent}>
+              <Text style={styles.title}>Odd Word Out</Text>
+              <Text style={styles.subtitle}>Tap the word that does not belong.</Text>
             </View>
+            <InstructionButton onPress={playInstruction} />
           </View>
 
-          {/* FEEDBACK / MIC SECTION */}
-          <View style={styles.bottomSection}>
-            <Text style={[
-              styles.feedbackText, 
-              feedbackType === 'error' && styles.textError,
-              feedbackType === 'success' && styles.textSuccess
-            ]}>
-              {feedbackMessage}
-            </Text>
-
-            {selectedOption && !showResultModal && (
-              <TouchableOpacity
-                style={[styles.micButton, isListening && styles.micActive]}
-                onPress={handleMicPress}
-              >
-                <Ionicons 
-                  name={isListening ? "mic" : "mic-outline"} 
-                  size={40} 
-                  color="white" 
-                />
-                {isListening && (
-                  <View style={styles.pulseRing} />
-                )}
-              </TouchableOpacity>
-            )}
+          {/* PROGRESS */}
+          <View style={styles.progressContainer}>
+            <Text style={styles.progressText}>Question {currentQIndex + 1} / {TOTAL_QUESTIONS}</Text>
           </View>
 
-        </View>
+          {/* MAIN CONTENT */}
+          <View style={styles.content}>
+            
+            {/* QUESTION CARD */}
+            <View style={styles.card}>
+              <View style={styles.optionsRow}>
+                {currentQuestion.options.map((opt) => {
+                  const isSelected = selectedOption?.id === opt.id;
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      style={[
+                        styles.optionButton,
+                        { width: optionWidth, height: optionHeight },
+                        isSelected && styles.optionSelected
+                      ]}
+                      onPress={() => handleOptionSelect(opt)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.iconCircle}>
+                        <MaterialCommunityIcons 
+                          name={opt.icon as any} 
+                          size={32} 
+                          color={isSelected ? '#FFF' : '#0288D1'} 
+                        />
+                      </View>
+                      <Text style={[
+                        styles.optionText,
+                        isSelected && styles.optionTextSelected
+                      ]}>
+                        {opt.word}
+                      </Text>
+                      {isSelected && (
+                         <View style={styles.checkBadge}>
+                           <Ionicons name="checkmark" size={12} color="#FFF" />
+                         </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
 
+            {/* FEEDBACK / MIC SECTION */}
+            <View style={styles.bottomSection}>
+              <Text style={[
+                styles.feedbackText, 
+                feedbackType === 'error' && styles.textError,
+                feedbackType === 'success' && styles.textSuccess
+              ]}>
+                {feedbackMessage}
+              </Text>
+
+              {selectedOption && !showResultModal && (
+                <TouchableOpacity
+                  style={[styles.micButton, isListening && styles.micActive]}
+                  onPress={handleMicPress}
+                >
+                  <Ionicons 
+                    name={isListening ? "mic" : "mic-outline"} 
+                    size={40} 
+                    color="white" 
+                  />
+                  {isListening && (
+                    <View style={styles.pulseRing} />
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+
+          </View>
+        </OfflineGuard>
       </SafeAreaView>
 
       {/* RESULT MODAL */}
-      <Modal visible={showResultModal} transparent animationType="fade">
+      <Modal visible={showResultModal} transparent animationType="fade" onRequestClose={saveAndExit}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Game Over!</Text>
@@ -545,8 +565,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   optionButton: {
-    width: '45%', // Fallback for wrap
-    aspectRatio: 1, // Square
+    // width handled dynamically
+    // aspectRatio handled dynamically or via height
     backgroundColor: '#F5F5F5',
     borderRadius: 16,
     alignItems: 'center',
@@ -560,9 +580,7 @@ const styles = StyleSheet.create({
     borderColor: '#01579B',
   },
   iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    // dimensions handled dynamically
     backgroundColor: '#E1F5FE',
     alignItems: 'center',
     justifyContent: 'center',

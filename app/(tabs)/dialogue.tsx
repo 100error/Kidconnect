@@ -1,10 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+import InstructionButton from "@/components/InstructionButton";
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from '@/hooks/useInstruction';
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
   type DialogueSection = {
     title: string;
@@ -22,6 +23,12 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
   };
 
 export default function Dialogue() {
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'dialogue',
+    "Learn how to speak in sentences! Tap any card to hear the phrase and an example."
+  );
+
   const sections: DialogueSection[] = useMemo(
     () => [
       {
@@ -81,24 +88,23 @@ export default function Dialogue() {
 
   const speak = (text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.9, pitch: 1.1 });
+    Speech.speak(text, { rate: 0.75, pitch: 1.1 });
     Haptics.selectionAsync();
   };
+
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 12;
+  const padding = 16;
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
 
   return (
     <LinearGradient colors={["#E0F7FA", "#E1F5FE"]} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Speech.stop();
-            router.push("/vocab");
-          }}
-        >
-          <Ionicons name="arrow-back" size={22} color="#2D2D2D" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/vocab" color="#2D2D2D" />
         <Text style={styles.title}>Dialogue Words</Text>
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -112,11 +118,11 @@ export default function Dialogue() {
               <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
             </View>
             
-            <View style={styles.cards}>
+            <View style={[styles.cards, { flexDirection: "row", flexWrap: "wrap", gap }]}>
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.card}
+                  style={[styles.card, { width: cardWidth }]}
                   onPress={() => speak(`${item.text}. ${item.description}. Example: ${item.example}`)}
                 >
                   <LinearGradient colors={["#FFFFFF", "#F9F9F9"]} style={styles.cardInner}>
@@ -149,7 +155,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 40,
+    paddingTop: 50,
     paddingBottom: 12,
   },
   backButton: {

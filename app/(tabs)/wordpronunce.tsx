@@ -1,29 +1,48 @@
+import InstructionButton from "@/components/InstructionButton";
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from '@/hooks/useInstruction';
 import { ensureMicPermission } from "@/services/mic";
 import { addResult } from "@/services/progress";
 import { addAttempt } from "@/services/speechlog";
-import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
-import { Ionicons } from "@expo/vector-icons";
 import { speechService } from "@/services/speechService";
+import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 const words: string[] = ["apple", "banana", "grape", "orange", "peach"];
 
 export default function WordPronounce() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [feedback, setFeedback] = useState<string>("");
   const [score, setScore] = useState<number>(0);
   const [isListening, setIsListening] = useState<boolean>(false);
 
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'wordpronunce',
+    "Tap to hear the word, then hold the button and say it."
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
+
   const currentWord = words[currentIndex];
 
   const speak = useCallback((text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.95, pitch: 1.05 });
+    Speech.speak(text, { rate: 0.8, pitch: 1.05 });
     Haptics.selectionAsync();
   }, []);
 
@@ -98,43 +117,39 @@ export default function WordPronounce() {
   return (
     <LinearGradient colors={["#E1F5FE", "#FFF3E0"]} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Speech.stop();
-            router.push("/pract");
-          }}
-        >
-          <Ionicons name="arrow-back" size={22} color="#2D2D2D" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/pract" color="#2D2D2D" style={{ borderRadius: 14 }} />
+        <InstructionButton onPress={playInstruction} />
         <Text style={styles.title}>Word Pronounce</Text>
       </View>
 
-      <Text style={styles.instructions}>Tap to hear the word, then hold the button and say it.</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={[styles.contentContainer, isTablet && styles.contentContainerTablet]}>
+          <Text style={styles.instructions}>Tap to hear the word, then hold the button and say it.</Text>
 
-      <TouchableOpacity style={styles.listenButton} onPress={() => speak(currentWord)}>
-        <Text style={styles.listenText}>Hear “{currentWord}” 🔊</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.highlight}>{currentWord.toUpperCase()}</Text>
-
-      <TouchableOpacity style={[styles.button, isListening && styles.buttonActive]} onPressIn={startListening} onPressOut={stopListening}>
-        <Text style={styles.buttonText}>{isListening ? "🎤 Listening..." : "🎙 Hold to Speak"}</Text>
-      </TouchableOpacity>
-
-      <View style={styles.chips}>
-        {words.map((w) => (
-          <TouchableOpacity key={w} style={styles.chip} onPress={() => speak(w)}>
-            <Text style={styles.chipText}>{w}</Text>
+          <TouchableOpacity style={styles.listenButton} onPress={() => speak(currentWord)}>
+            <Text style={styles.listenText}>Hear “{currentWord}” 🔊</Text>
           </TouchableOpacity>
-        ))}
-      </View>
 
-      <View style={styles.feedbackBox}>
-        <Text style={styles.feedback}>{feedback}</Text>
-        <Text style={styles.score}>⭐ Score: {score}</Text>
-      </View>
+          <Text style={styles.highlight}>{currentWord.toUpperCase()}</Text>
+
+          <TouchableOpacity style={[styles.button, isListening && styles.buttonActive]} onPressIn={startListening} onPressOut={stopListening}>
+            <Text style={styles.buttonText}>{isListening ? "🎤 Listening..." : "🎙 Hold to Speak"}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.chips}>
+            {words.map((w) => (
+              <TouchableOpacity key={w} style={styles.chip} onPress={() => speak(w)}>
+                <Text style={styles.chipText}>{w}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.feedbackBox}>
+            <Text style={styles.feedback}>{feedback}</Text>
+            <Text style={styles.score}>⭐ Score: {score}</Text>
+          </View>
+        </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -142,6 +157,19 @@ export default function WordPronounce() {
 const styles = StyleSheet.create({
   container: {
     flex: 1
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: 20
+  },
+  contentContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  contentContainerTablet: {
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: "row",
@@ -208,7 +236,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF6F00",
     padding: 16,
     borderRadius: 50,
-    width: 220,
+    minWidth: 200,
+    paddingHorizontal: 40,
     alignItems: "center",
     alignSelf: "center"
   },

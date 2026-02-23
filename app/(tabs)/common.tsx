@@ -1,5 +1,7 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
+import { useInstruction } from "@/hooks/useInstruction";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -209,6 +211,12 @@ export default function Common() {
   const router = useRouter();
   const [playingId, setPlayingId] = useState<string | null>(null);
 
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'common',
+    "Learn common words! Tap a section to see examples and hear them spoken."
+  );
+
   useFocusEffect(
     React.useCallback(() => {
       return () => {
@@ -257,7 +265,7 @@ export default function Common() {
       <View style={styles.header}>
         <BackButton targetRoute="/vocab" color="#333" />
         <Text style={styles.headerTitle}>Common Words</Text>
-        <View style={{ width: 40 }} />
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

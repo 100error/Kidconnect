@@ -1,12 +1,14 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
 import SentenceCard from "@/components/ui/SentenceCard";
+import { useInstruction } from "@/hooks/useInstruction";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useState } from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 type TenseItem = {
   id: string;
@@ -165,6 +167,19 @@ const tenseGroups: TenseGroup[] = [
 ];
 
 export default function Tenses() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 16;
+  const padding = 16;
+  // available width = screen width - (padding * 2) - (gap * (numColumns - 1))
+  // card width = available width / numColumns
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
+  const { play: playInstruction } = useInstruction(
+    "tenses",
+    "Learn about tenses! Tap a section to see how we use them, then tap the cards to hear examples."
+  );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   // Stop speech when leaving the screen
@@ -214,7 +229,7 @@ export default function Tenses() {
       <View style={styles.header}>
         <BackButton targetRoute="/vocab" color="#333" />
         <Text style={styles.headerTitle}>Learning Tenses</Text>
-        <View style={{ width: 40 }} />
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -245,7 +260,7 @@ export default function Tenses() {
                 />
             </View>
             
-            <View style={styles.grid}>
+            <View style={[styles.grid, { flexDirection: 'row', flexWrap: 'wrap', gap: gap }]}>
               {group.items.map((item) => (
                 <SentenceCard
                   key={item.id}
@@ -256,6 +271,7 @@ export default function Tenses() {
                   isPlaying={playingId === item.id}
                   onPlay={() => handlePlay(item.id, item.sentence)}
                   onStop={handleStop}
+                  style={{ width: cardWidth, marginBottom: 0 }}
                 />
               ))}
             </View>

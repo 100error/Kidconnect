@@ -1,10 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
+import InstructionButton from "@/components/InstructionButton";
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from "@/hooks/useInstruction";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 type SpellingSection = {
   title: string;
@@ -23,6 +25,27 @@ type SpellingRule = {
 };
 
 export default function Spelled() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 16;
+  const padding = 16;
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
+  // Audio enabled
+  const { play: playInstruction } = useInstruction(
+    "spelled",
+    "Learn the secrets of spelling! Tap any card to hear the rule and examples."
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
+
   const sections: SpellingSection[] = useMemo(
     () => [
       {
@@ -139,24 +162,16 @@ export default function Spelled() {
 
   const speak = (text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.9, pitch: 1.1 });
+    Speech.speak(text, { rate: 0.85, pitch: 1.1 });
     Haptics.selectionAsync();
   };
 
   return (
     <LinearGradient colors={["#FFF3E0", "#E1F5FE"]} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Speech.stop();
-            router.push("/vocab");
-          }}
-        >
-          <Ionicons name="arrow-back" size={22} color="#2D2D2D" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/vocab" color="#2D2D2D" />
         <Text style={styles.title}>Spelling Rules</Text>
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -170,9 +185,9 @@ export default function Spelled() {
               <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
             </View>
 
-            <View style={styles.cards}>
+            <View style={[styles.cards, { flexDirection: "row", flexWrap: "wrap" }]}>
               {section.items.map((item) => (
-                <View key={item.id} style={styles.cardWrapper}>
+                <View key={item.id} style={[styles.cardWrapper, { width: cardWidth }]}>
                   <TouchableOpacity
                     style={styles.card}
                     activeOpacity={0.9}
@@ -241,12 +256,9 @@ const styles = StyleSheet.create({
     color: "#2D2D2D"
   },
   title: {
-    flex: 1,
-    textAlign: "right",
     fontSize: 24,
     fontWeight: "800",
     color: "#3E2723",
-    paddingLeft: 12
   },
   scroll: {
     paddingHorizontal: 16,

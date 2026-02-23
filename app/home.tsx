@@ -1,6 +1,8 @@
 import GradientButton from "@/components/GradientButton";
+import SettingsModal from "@/components/SettingsModal"; // Import Modal
 import TutorialOverlay from "@/components/TutorialOverlay";
 import { DailyProgress, getCurrent24hProgress, getDailyHistory, subscribeProgress } from "@/services/progress";
+import { settingsService } from "@/services/settings"; // Import Settings Service
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Audio } from "expo-av";
@@ -29,6 +31,9 @@ const Home = () => {
   const [overallProgress, setOverallProgress] = useState<number>(0);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [historyData, setHistoryData] = useState<DailyProgress[]>([]);
+  const [username, setUsername] = useState<string | null>(null);
+  
+  const [settingsVisible, setSettingsVisible] = useState(false); // Settings Modal State
 
   const menuItems = [
     { 
@@ -67,7 +72,7 @@ const Home = () => {
     }
   };
 
-  // PLAY BACKGROUND MUSIC
+  // PLAY BACKGROUND MUSIC with Settings Check
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -75,6 +80,9 @@ const Home = () => {
       const loadAndPlayMusic = async () => {
         try {
           await stopBgMusic();
+          
+          const musicEnabled = await settingsService.isMusicEnabled();
+          if (!musicEnabled) return;
 
           const { sound } = await Audio.Sound.createAsync(
             require("../assets/music/fun.mp3"),
@@ -93,11 +101,29 @@ const Home = () => {
 
       loadAndPlayMusic();
       
+      // Subscribe to settings changes to toggle music dynamically
+      const settingsListener = (settings: any) => {
+        if (settings.musicEnabled) {
+          if (!bgMusicRef.current && isActive) {
+             loadAndPlayMusic();
+          }
+        } else {
+          stopBgMusic();
+        }
+      };
+      settingsService.addListener(settingsListener);
+
       // Check progress on focus (handles 24h reset)
       getCurrent24hProgress().then(setOverallProgress).catch(() => {});
+      
+      // Load Profile Name
+      profileService.getProfile().then(p => {
+        if (p?.username) setUsername(p.username);
+      }).catch(() => {});
 
       return () => {
         isActive = false;
+        settingsService.removeListener(settingsListener);
         stopBgMusic();
         Speech.stop(); // Stop any narration/TTS
       };
@@ -171,7 +197,10 @@ const Home = () => {
   const handleLessonPress = async (item: { screen: string; title: string }) => {
     // Play TTS and navigate
     Speech.stop();
-    Speech.speak(item.title, { rate: 1.0, pitch: 1.1 });
+    const soundEnabled = await settingsService.isSoundEnabled();
+    if (soundEnabled) {
+      Speech.speak(item.title, { rate: 1.0, pitch: 1.1 });
+    }
     
     try {
       navigation.navigate(item.screen);
@@ -212,19 +241,27 @@ const Home = () => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Progress Section - Top Right */}
-          <View 
-            style={styles.headerContainer}
-            ref={progressRef}
-            onLayout={(event) => setProgressLayout(event.nativeEvent.layout)}
-          >
+          {/* Header Section */}
+          <View style={styles.headerContainer}>
+            {/* Settings Button - Top Left */}
+            <TouchableOpacity 
+              style={styles.menuButton} 
+              onPress={() => setSettingsVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="menu" size={32} color="#fff" />
+            </TouchableOpacity>
+
+            {/* Progress Section - Top Right */}
              <TouchableOpacity 
                style={styles.progressWrapper} 
                onPress={handleProgressPress}
                activeOpacity={0.8}
+               ref={progressRef}
+               onLayout={(event) => setProgressLayout(event.nativeEvent.layout)}
              >
               <Progress.Circle
-                size={80}
+                size={70}
                 progress={overallProgress / 100}
                 showsText={true}
                 formatText={() => `${Math.round(overallProgress)}%`}
@@ -238,7 +275,9 @@ const Home = () => {
           </View>
 
           {/* Welcome Title */}
-          <Text style={styles.welcomeText}>Hi! Ready to learn?</Text>
+          <Text style={styles.welcomeText}>
+            Hi {username ? `${username}` : ""}! Ready to learn?
+          </Text>
 
           {/* Lesson Buttons */}
           <View 
@@ -256,6 +295,11 @@ const Home = () => {
               />
             ))}
           </View>
+
+          <SettingsModal 
+            visible={settingsVisible} 
+            onClose={() => setSettingsVisible(false)} 
+          />
 
           <TutorialOverlay
               isVisible={tutorialVisible}
@@ -327,10 +371,19 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     width: '100%',
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 20,
     marginBottom: 10,
-    height: 95, // Explicit height for layout stability
+    height: 95, 
+  },
+  menuButton: {
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   progressWrapper: {
     backgroundColor: 'rgba(255,255,255,0.2)',

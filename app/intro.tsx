@@ -62,8 +62,8 @@ export default function Intro() {
 
     return () => {
       if (soundInstance) {
-        soundInstance.stopAsync();
-        soundInstance.unloadAsync();
+        soundInstance.stopAsync().catch(() => {});
+        soundInstance.unloadAsync().catch(() => {});
       }
     };
   }, []);

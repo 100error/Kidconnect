@@ -1,8 +1,8 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
+import React from 'react';
+import { BackHandler, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 
 interface BackButtonProps {
   /**
@@ -59,6 +59,17 @@ export default function BackButton({
       }
     }
   };
+
+  // Handle Android hardware back button
+  React.useEffect(() => {
+    const onBackPress = () => {
+      handlePress();
+      return true; // Prevent default behavior
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [onPress, targetRoute]); // Re-bind if props change
 
   return (
     <TouchableOpacity onPress={handlePress} style={[styles.button, style]}>

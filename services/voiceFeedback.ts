@@ -3,7 +3,7 @@ import * as Speech from "expo-speech";
 
 export function speakNow(text: string) {
   Speech.stop();
-  Speech.speak(text, { rate: 0.95, pitch: 1.05 });
+  Speech.speak(text, { rate: 0.85, pitch: 1.05 });
   Haptics.selectionAsync();
 }
 

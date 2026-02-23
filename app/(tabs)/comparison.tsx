@@ -1,10 +1,12 @@
+import InstructionButton from "@/components/InstructionButton";
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from '@/hooks/useInstruction';
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 type ComparisonItem = {
   id: string;
@@ -26,7 +28,20 @@ type ComparisonSection = {
 };
 
 export default function Comparison() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 12;
+  const padding = 20;
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
   const [playingId, setPlayingId] = useState<string | null>(null);
+
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'comparison',
+    "We use comparison words to talk about how things are different. Tap any card to hear examples!"
+  );
 
   const sections: ComparisonSection[] = useMemo(
     () => [
@@ -270,7 +285,7 @@ export default function Comparison() {
     Speech.stop();
     setPlayingId(id);
     Speech.speak(text, {
-      rate: 0.9,
+      rate: 0.75,
       pitch: 1.1,
       onDone: () => setPlayingId(null),
       onStopped: () => setPlayingId(null),
@@ -282,17 +297,9 @@ export default function Comparison() {
   return (
     <LinearGradient colors={["#E3F2FD", "#FFFFFF"]} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Speech.stop();
-            router.push("/vocab");
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#37474F" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/vocab" color="#37474F" />
         <Text style={styles.headerTitle}>Comparison Words</Text>
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -307,11 +314,11 @@ export default function Comparison() {
             </View>
             <Text style={styles.sectionDescription}>{section.description}</Text>
 
-            <View style={styles.cardsContainer}>
+            <View style={[styles.cardsContainer, { flexDirection: "row", flexWrap: "wrap" }]}>
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.card}
+                  style={[styles.card, { width: cardWidth }]}
                   onPress={() => speak(`${item.base}. ${item.baseSentence} ... ${item.comparative}. ${item.compSentence} ... ${item.superlative}. ${item.supSentence}`, item.id)}
                   activeOpacity={0.7}
                 >
@@ -362,6 +369,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,

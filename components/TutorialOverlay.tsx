@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Dimensions, LayoutRectangle, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { BackHandler, Dimensions, LayoutRectangle, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface TutorialOverlayProps {
   isVisible: boolean; 
@@ -18,6 +18,19 @@ export default function TutorialOverlay({
   progressLayout,
 }: TutorialOverlayProps) {
   const [step, setStep] = useState(0);
+
+  // Handle hardware back button
+  useEffect(() => {
+    if (isVisible) {
+      const onBackPress = () => {
+        onClose();
+        return true; // Prevent default behavior (exit app)
+      };
+      
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }
+  }, [isVisible, onClose]);
 
   if (!isVisible) return null;
 

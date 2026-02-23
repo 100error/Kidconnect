@@ -1,5 +1,7 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import NounCard, { NounLesson } from "@/components/ui/NounCard";
+import { useInstruction } from "@/hooks/useInstruction";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
@@ -167,6 +169,17 @@ const nounLessons: NounLesson[] = [
 ];
 
 export default function Nouns() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 16;
+  const padding = 16;
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
+  const { play: playInstruction } = useInstruction(
+    "nouns",
+    "Learn about nouns! Tap a card to learn what each type of noun is."
+  );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   // Stop speech when leaving the screen
@@ -205,7 +218,7 @@ export default function Nouns() {
       <View style={styles.header}>
         <BackButton targetRoute="/vocab" color="#333" />
         <Text style={styles.headerTitle}>Types of Nouns</Text>
-        <View style={{ width: 40 }} />
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -213,9 +226,9 @@ export default function Nouns() {
           Explore the different types of nouns below!
         </Text>
 
-        <View style={styles.grid}>
+        <View style={[styles.grid, { flexDirection: "row", flexWrap: "wrap", gap: gap }]}>
           {nounLessons.map((lesson) => (
-            <View key={lesson.id} style={styles.gridItem}>
+            <View key={lesson.id} style={[styles.gridItem, { width: cardWidth, marginBottom: 0 }]}>
               <NounCard 
                 lesson={lesson}
                 isPlaying={playingId === lesson.id}

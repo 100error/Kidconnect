@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React from "react";
+import { StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from "react-native";
 
 export type SentenceCardProps = {
   sentence: string;
@@ -10,6 +10,7 @@ export type SentenceCardProps = {
   isPlaying: boolean;
   onPlay: () => void;
   onStop: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function SentenceCard({
@@ -20,6 +21,7 @@ export default function SentenceCard({
   isPlaying,
   onPlay,
   onStop,
+  style,
 }: SentenceCardProps) {
   const handlePress = () => {
     if (isPlaying) {
@@ -31,7 +33,7 @@ export default function SentenceCard({
 
   return (
     <TouchableOpacity
-      style={[styles.card, { borderColor: darkColor, backgroundColor: color }]}
+      style={[styles.card, { borderColor: darkColor, backgroundColor: color }, style]}
       onPress={handlePress}
       activeOpacity={0.9}
     >

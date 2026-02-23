@@ -1,14 +1,14 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from '@/components/ui/BackButton';
-import InstructionModal from "@/components/InstructionModal";
-import { checkInstructionSeen, markInstructionSeen } from "@/services/instructions";
+import { useInstruction } from '@/hooks/useInstruction';
 import { addResult } from '@/services/progress';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useState } from 'react';
-import { Modal, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 // ----------------------------------------------------------------------------
 // TYPES & DATA
@@ -23,7 +23,7 @@ type Question = {
   icon: keyof typeof Ionicons.glyphMap;
 };
 
-const questions: Question[] = [
+const staticQuestions: Question[] = [
   { 
     id: '1', 
     part1: 'She', 
@@ -112,33 +112,48 @@ const questions: Question[] = [
 
 export default function PresentSimpleTenseScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 20;
+  const padding = 20;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   // State
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, boolean>>({}); // true = correct, false = incorrect
   const [activeId, setActiveId] = useState<string | null>(null); // Which question is currently being interacted with
   const [isCompleted, setIsCompleted] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
-  const [showInstruction, setShowInstruction] = useState(false);
 
-  // Play instructions on mount
+  // Randomize on mount
   useEffect(() => {
-    checkInstructionSeen('presentsimpletense').then(seen => {
-      if (!seen) {
-        setShowInstruction(true);
-      } else {
-        const timeout = setTimeout(() => {
-          Speech.speak("Fill in the blank with the correct verb in the bracket.", { rate: 0.9, pitch: 1.1 });
-        }, 500);
-        return () => clearTimeout(timeout);
-      }
-    });
+    const shuffled = [...staticQuestions].sort(() => 0.5 - Math.random());
+    setQuestions(shuffled);
   }, []);
+
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'presentsimpletense',
+    "Fill in the blank with the correct verb in the bracket."
+  );
+
+  // Stop audio on unmount/blur
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
 
   // Handle saving when all done
   useEffect(() => {
     const checkCompletion = async () => {
+      if (questions.length === 0) return; // Wait for questions to load
+
       const answeredCount = Object.keys(answers).length;
       if (answeredCount === questions.length && !isCompleted) {
         setIsCompleted(true);
@@ -217,7 +232,7 @@ export default function PresentSimpleTenseScreen() {
 
   const speakSentence = (text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.9 });
+    Speech.speak(text, { rate: 0.85 });
   };
 
   return (
@@ -228,7 +243,7 @@ export default function PresentSimpleTenseScreen() {
         <View style={styles.header}>
           <BackButton targetRoute="/pract" color="#5D4037" />
           <Text style={styles.headerTitle}>Present Simple Tense</Text>
-          <View style={{ width: 40 }} /> 
+          <InstructionButton onPress={playInstruction} />
         </View>
 
         {/* INSTRUCTION */}
@@ -236,13 +251,10 @@ export default function PresentSimpleTenseScreen() {
           <Text style={styles.instructionText}>
             Fill in the blank with the correct verb in the bracket.
           </Text>
-          <TouchableOpacity onPress={() => Speech.speak("Fill in the blank with the correct verb in the bracket.", { rate: 0.9 })}>
-            <Ionicons name="volume-high" size={24} color="#FB8C00" />
-          </TouchableOpacity>
         </View>
 
         {/* LIST */}
-        <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.listContent, { flexDirection: isTablet ? 'row' : 'column', flexWrap: 'wrap', gap: isTablet ? gap : 0 }]} showsVerticalScrollIndicator={false}>
           {questions.map((q, index) => {
             const answer = answers[q.id];
             const isCorrect = results[q.id];
@@ -250,7 +262,7 @@ export default function PresentSimpleTenseScreen() {
             const isOpen = activeId === q.id;
 
             return (
-              <View key={q.id} style={styles.card}>
+              <View key={q.id} style={[styles.card, { width: cardWidth }]}>
                 <View style={styles.cardHeader}>
                   <View style={styles.numberBadge}>
                     <Text style={styles.numberText}>{index + 1}</Text>
@@ -322,7 +334,7 @@ export default function PresentSimpleTenseScreen() {
           animationType="fade"
           transparent={true}
           visible={modalVisible}
-          onRequestClose={() => {}}
+          onRequestClose={() => setModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -359,16 +371,6 @@ export default function PresentSimpleTenseScreen() {
           </View>
         </Modal>
 
-        <InstructionModal
-          visible={showInstruction}
-          onClose={() => {
-            setShowInstruction(false);
-            markInstructionSeen('presentsimpletense');
-          }}
-          instructionText={`Read the sentence.\nChoose the correct verb.\nFinish all items to see your score!`}
-          iconName="time"
-        />
-
       </SafeAreaView>
     </LinearGradient>
   );
@@ -390,6 +392,8 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 22,
     fontWeight: 'bold',
     color: '#5D4037',
@@ -429,6 +433,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3,
+    width: '100%',
+  },
+  cardTablet: {
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   cardHeader: {
     flexDirection: 'row',

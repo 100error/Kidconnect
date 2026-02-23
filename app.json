@@ -4,7 +4,7 @@
     "slug": "Kid",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/dongggg.png",
+    "icon": "./assets/images/d.png",
     "scheme": "kid",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,9 +14,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/dongggg.png",
-        "backgroundImage": "./assets/images/dongggg.png",
-        "monochromeImage": "./assets/images/dongggg.png"
+        "foregroundImage": "./assets/images/d.png",
+        "backgroundImage": "./assets/images/d.png",
+        "monochromeImage": "./assets/images/d.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -53,8 +53,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "550189ac-948e-43a8-973c-e588f97261eb"
+        "projectId": "b6ba09fd-c650-4478-a578-0a285d3a95a2"
       }
-    }
+    },
+    "owner": "relin04"
   }
 }

@@ -1,14 +1,18 @@
+import InstructionButton from "@/components/InstructionButton";
+import OfflineGuard from "@/components/OfflineGuard";
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from '@/hooks/useInstruction';
+import { playbackService } from "@/services/audio/playback";
 import { ensureMicPermission } from "@/services/mic";
 import { addResult } from "@/services/progress";
 import { addAttempt } from "@/services/speechlog";
 import { speechService } from "@/services/speechService";
 import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Audio } from 'expo-av';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from "expo-speech";
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 type Story = {
   text: string;
@@ -26,33 +30,43 @@ function StorySpeak() {
       { text: "She likes to play.", target: "play", icon: "gamepad-variant" },
       { text: "The sun is hot.", target: "sun", icon: "white-balance-sunny" },
       { text: "We go to the park.", target: "park", icon: "pine-tree" },
+      { text: "The bird can fly.", target: "bird", icon: "bird" },
+      { text: "I like red apples.", target: "apples", icon: "food-apple" },
+      { text: "My fish can swim.", target: "fish", icon: "fish" },
+      { text: "The car is fast.", target: "car", icon: "car" },
+      { text: "I have a blue ball.", target: "ball", icon: "soccer" },
     ],
     []
   );
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [mistakes, setMistakes] = useState<Set<number>>(new Set());
   const [recognizedText, setRecognizedText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
   const [wordStatus, setWordStatus] = useState<'neutral' | 'correct' | 'incorrect'>('neutral');
 
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'storyspeak',
+    "Read the story out loud! Tap the microphone and read the highlighted word."
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        Speech.stop();
+      };
+    }, [])
+  );
+
   const currentStory = stories[currentIndex];
 
   const playSound = async (type: 'correct' | 'wrong') => {
-    try {
-      const file = type === 'correct' 
-        ? require('@/assets/music/feedback/correct.mp3')
-        : require('@/assets/music/feedback/wrong.mp3');
-        
-      const { sound } = await Audio.Sound.createAsync(file);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          await sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.log('Error playing sound:', error);
+    if (type === 'correct') {
+      playbackService.playSound('correct');
+    } else {
+      playbackService.playSound('incorrect');
     }
   };
 
@@ -79,19 +93,27 @@ function StorySpeak() {
                   setWordStatus('neutral');
                 } else {
                   setGameCompleted(true);
+                  const score = 10 - mistakes.size;
                   await addResult({
                     activityId: "storyspeak",
                     category: "game",
-                    score: 100,
-                    maxScore: 100,
+                    score: Math.max(0, score),
+                    maxScore: 10,
                     completed: true,
                   });
+                  
+                  Alert.alert(
+                    "Game Over!",
+                    `You scored ${score} / 10`,
+                    [{ text: "Exit", onPress: handleExit }]
+                  );
                 }
               },
             },
           ]);
         }, 500);
       } else {
+        setMistakes(prev => new Set(prev).add(currentIndex));
         setWordStatus('incorrect');
         playSound('wrong');
         speakCorrection(`Try again. Read the word ${currentStory.target}.`);
@@ -111,14 +133,10 @@ function StorySpeak() {
   };
 
   useEffect(() => {
-    ensureMicPermission();
-
     return () => {
-       if (isListening) {
-         speechService.stopRecording();
-       }
+       speechService.stopRecording();
     };
-  }, [isListening]);
+  }, []);
 
   const startListening = async () => {
     if (isListening) return; // Prevent double start
@@ -191,13 +209,21 @@ function StorySpeak() {
     );
   };
 
+  const { width } = useWindowDimensions();
+  const isCompact = width < 600;
+  
+  // Responsive sizing
+  const micSize = isCompact ? 70 : 100;
+  const imageSize = isCompact ? 120 : 180;
+  const titleSize = isCompact ? 24 : 32;
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <OfflineGuard>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.navButton} onPress={handleExit}>
-          <Ionicons name="arrow-back" size={28} color="#6A1B9A" />
-          <Text style={styles.navButtonText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/games" color="#0277BD" />
+
+        <InstructionButton onPress={playInstruction} />
         
         <TouchableOpacity style={styles.navButton} onPress={handleExit}>
           <Text style={styles.navButtonText}>Exit</Text>
@@ -207,7 +233,7 @@ function StorySpeak() {
 
       <View style={styles.mainContainer}>
         {!gameCompleted ? (
-          <View style={styles.card}>
+          <View style={[styles.card, { flexDirection: 'column' }]}>
             {/* Card Header Label */}
             <Text style={styles.cardLabel}>Reading Practice</Text>
             
@@ -217,18 +243,18 @@ function StorySpeak() {
             </View>
 
             {/* Split Content Area */}
-            <View style={styles.contentRow}>
+            <View style={[styles.contentRow, { flexDirection: isCompact ? 'column-reverse' : 'row' }]}>
               {/* Left: Interaction */}
-              <View style={styles.leftColumn}>
+              <View style={[styles.leftColumn, isCompact && { paddingRight: 0, borderRightWidth: 0, marginTop: 20 }]}>
                 <Text style={styles.instructionText}>
                   Read the highlighted word:
                 </Text>
                 
                 <TouchableOpacity
-                  style={[styles.micButton, isListening && styles.micButtonActive]}
+                  style={[styles.micButton, isListening && styles.micButtonActive, { width: micSize, height: micSize, borderRadius: micSize / 2 }]}
                   onPress={isListening ? stopListening : startListening}
                 >
-                  <Ionicons name={isListening ? "mic" : "mic-outline"} size={40} color="white" />
+                  <Ionicons name={isListening ? "mic" : "mic-outline"} size={micSize * 0.5} color="white" />
                 </TouchableOpacity>
                 <Text style={styles.micLabel}>
                   {isListening ? "Listening..." : "Tap to Speak"}
@@ -243,16 +269,16 @@ function StorySpeak() {
               </View>
 
               {/* Right: Icon/Image */}
-              <View style={styles.rightColumn}>
-                <View style={styles.imagePlaceholder}>
-                   <MaterialCommunityIcons name={currentStory.icon} size={100} color="#FF7043" />
+              <View style={[styles.rightColumn, isCompact && { borderLeftWidth: 0, borderBottomWidth: 1, borderBottomColor: '#EEEEEE', paddingBottom: 20 }]}>
+                <View style={[styles.imagePlaceholder, { width: imageSize, height: imageSize }]}>
+                   <MaterialCommunityIcons name={currentStory.icon} size={imageSize * 0.6} color="#FF7043" />
                 </View>
               </View>
             </View>
           </View>
         ) : (
           <View style={[styles.card, styles.centerContent]}>
-            <Text style={styles.congrats}>🎉 Awesome Job!</Text>
+            <Text style={[styles.congrats, { fontSize: titleSize }]}>🎉 Awesome Job!</Text>
             <Text style={styles.congratsSub}>You finished the story!</Text>
             <TouchableOpacity style={styles.button} onPress={handleExit}>
                <Text style={styles.buttonText}>Back to Games</Text>
@@ -260,6 +286,7 @@ function StorySpeak() {
           </View>
         )}
       </View>
+      </OfflineGuard>
     </SafeAreaView>
   );
 }

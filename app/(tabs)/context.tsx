@@ -1,10 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+import InstructionButton from "@/components/InstructionButton";
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from '@/hooks/useInstruction';
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
   type ContextSection = {
     title: string;
@@ -24,6 +25,19 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
   };
 
 export default function Context() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 12;
+  const padding = 16;
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
+  // Instructions
+  const { play: playInstruction } = useInstruction(
+    'context',
+    "Learn how to find meaning! Tap the cards to hear clues and examples."
+  );
+
   const sections: ContextSection[] = useMemo(
     () => [
       {
@@ -153,24 +167,16 @@ export default function Context() {
 
   const speak = (text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.9, pitch: 1.1 });
+    Speech.speak(text, { rate: 0.75, pitch: 1.1 });
     Haptics.selectionAsync();
   };
 
   return (
     <LinearGradient colors={["#E8EAF6", "#E3F2FD"]} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Speech.stop();
-            router.push("/vocab");
-          }}
-        >
-          <Ionicons name="arrow-back" size={22} color="#2D2D2D" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/vocab" color="#1A237E" />
         <Text style={styles.title}>Context Clues</Text>
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -184,11 +190,11 @@ export default function Context() {
               <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
             </View>
 
-            <View style={styles.cards}>
+            <View style={[styles.cards, { flexDirection: "row", flexWrap: "wrap", gap }]}>
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.card}
+                  style={[styles.card, { width: cardWidth }]}
                   onPress={() => {
                     let textToSpeak = `${item.word}. ${item.description} Example: ${item.example}`;
                     if (item.description2 && item.example2) {
@@ -238,9 +244,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 12,
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(255,255,255,0.7)",
   },
   backButton: {
     flexDirection: "row",

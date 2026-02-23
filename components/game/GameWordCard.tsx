@@ -1,5 +1,8 @@
-import { TTS } from "@/services/audio/tts";
+import { playbackService } from "@/services/audio/playback";
+import { ensureMicPermission } from "@/services/mic";
 import { speechService } from "@/services/speechService";
+import { addAttempt } from "@/services/speechlog";
+import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
@@ -29,15 +32,13 @@ export default function GameWordCard({
 
   useEffect(() => {
     return () => {
-      if (isListening) {
-          speechService.stopRecording();
-      }
+      speechService.stopRecording();
     };
-  }, [isListening]);
+  }, []);
 
   const handleSpeak = () => {
     if (!isListening) {
-        TTS.speak(word);
+      speakPraise(word); // Just speak the word
     }
   };
 
@@ -46,15 +47,22 @@ export default function GameWordCard({
         const result = await speechService.recognizeSpeech(uri);
         console.log(`Recognized: ${result.transcript} (Conf: ${result.confidence}) vs Target: ${word}`);
         
-        if (speechService.checkWord(result, word)) {
+        const success = speechService.checkWord(result, word);
+        
+        // Log attempt
+        addAttempt({ activityId: 'pronunciation-game', text: result.transcript || '', success });
+
+        if (success) {
             setFeedback("correct");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            TTS.speak("Good job!");
+            playbackService.playSound("correct");
+            speakPraise("Good job!");
             if (onSuccess) onSuccess();
         } else {
             setFeedback("incorrect");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            TTS.speak("Try again");
+            playbackService.playSound("incorrect");
+            speakCorrection("Try again");
             if (onFailure) onFailure();
             setTimeout(() => setFeedback("idle"), 1500);
         }
@@ -87,7 +95,7 @@ export default function GameWordCard({
 
     // Start
     try {
-        const hasPermission = await speechService.requestPermissions();
+        const hasPermission = await ensureMicPermission();
         if (!hasPermission) return;
 
         setFeedback("listening");

@@ -1,10 +1,14 @@
+import { useInstruction } from "@/hooks/useInstruction";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import InstructionButton from "../../components/InstructionButton";
+// Force linter refresh
+import BackButton from "../../components/ui/BackButton";
 
 type QuestionItem = {
   id: string;
@@ -29,7 +33,28 @@ type PracticeItem = {
 };
 
 export default function Questions() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 12;
+  const padding = 20;
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
+  // Audio enabled
+  const { play: playInstruction } = useInstruction(
+    "questions",
+    "Question words help us learn new things! Tap a card to hear the question and answer."
+  );
   const [playingId, setPlayingId] = useState<string | null>(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        Speech.stop();
+        setPlayingId(null);
+      };
+    }, [])
+  );
 
   const sections: QuestionSection[] = useMemo(
     () => [
@@ -253,7 +278,7 @@ export default function Questions() {
     Speech.stop();
     setPlayingId(id);
     Speech.speak(text, {
-      rate: 0.9,
+      rate: 0.85,
       pitch: 1.1,
       onDone: () => setPlayingId(null),
       onStopped: () => setPlayingId(null),
@@ -265,17 +290,9 @@ export default function Questions() {
   return (
     <LinearGradient colors={["#E1F5FE", "#FFFFFF"]} style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            Speech.stop();
-            router.push("/vocab");
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#37474F" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <BackButton targetRoute="/vocab" color="#37474F" />
         <Text style={styles.headerTitle}>Question Words</Text>
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -290,11 +307,11 @@ export default function Questions() {
             </View>
             <Text style={styles.sectionDescription}>{section.description}</Text>
 
-            <View style={styles.cardsContainer}>
+            <View style={[styles.cardsContainer, { flexDirection: "row", flexWrap: "wrap", gap }]}>
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.card}
+                  style={[styles.card, { width: cardWidth }]}
                   onPress={() => speak(`${item.word}. ${item.usage} ... Question: ${item.question} ... Answer: ${item.answer}`, item.id)}
                   activeOpacity={0.7}
                 >
@@ -380,6 +397,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,

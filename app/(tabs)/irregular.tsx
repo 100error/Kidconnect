@@ -1,12 +1,14 @@
+import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
+import { useInstruction } from "@/hooks/useInstruction";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo, useState } from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 type IrregularItem = {
   id: string;
@@ -29,6 +31,19 @@ type IrregularGroup = {
 };
 
 export default function Irregular() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 12;
+  const padding = 16;
+  // available width = screen width - (padding * 2) - (gap * (numColumns - 1))
+  // card width = available width / numColumns
+  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+
+  const { play: playInstruction } = useInstruction(
+    "irregular",
+    "Learn tricky words! Tap a card to hear the word and example."
+  );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   const irregularGroups: IrregularGroup[] = useMemo(() => [
@@ -188,7 +203,7 @@ export default function Irregular() {
     setPlayingId(id);
 
     Speech.speak(text, {
-      rate: 0.9,
+      rate: 0.75,
       pitch: 1.1,
       onDone: () => setPlayingId(null),
       onStopped: () => setPlayingId(null),
@@ -222,7 +237,7 @@ export default function Irregular() {
       <View style={styles.header}>
         <BackButton targetRoute="/vocab" color="#333" />
         <Text style={styles.headerTitle}>Irregular Words</Text>
-        <View style={{ width: 40 }} />
+        <InstructionButton onPress={playInstruction} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -253,11 +268,11 @@ export default function Irregular() {
                 />
             </View>
             
-            <View style={styles.grid}>
+            <View style={[styles.grid, { flexDirection: "row", flexWrap: "wrap" }]}>
               {group.items.map((item) => (
                 <TouchableOpacity
                     key={item.id}
-                    style={[styles.card, { borderColor: group.darkColor, backgroundColor: group.color }]}
+                    style={[styles.card, { borderColor: group.darkColor, backgroundColor: group.color, width: cardWidth }]}
                     onPress={() => {
                         const textToSpeak = `${item.word}. Sounds like ${item.soundsLike}. Example: ${item.example}`;
                         handlePlay(item.id, textToSpeak);

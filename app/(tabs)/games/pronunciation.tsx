@@ -1,161 +1,207 @@
 import GameWordCard from "@/components/game/GameWordCard";
+import InstructionButton from "@/components/InstructionButton";
+import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from '@/hooks/useInstruction';
 import { addResult } from "@/services/progress";
+import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from "expo-speech";
-import React, { useMemo, useState } from "react";
-import { FlatList, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { vowelSections } from "../common";
+import React, { useCallback, useMemo, useState } from "react";
+import { FlatList, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+
+/* ---------------- GAME DATA ---------------- */
+
+const GAME_WORDS: { word: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { word: "Happy", icon: "happy" },
+  { word: "Sad", icon: "sad" },
+  { word: "Run", icon: "walk" },
+  { word: "Jump", icon: "arrow-up-circle" },
+  { word: "Sleep", icon: "bed" },
+  { word: "Eat", icon: "restaurant" },
+  { word: "Ball", icon: "football" },
+  { word: "Book", icon: "book" },
+  { word: "Car", icon: "car" },
+  { word: "House", icon: "home" },
+  { word: "Sun", icon: "sunny" },
+  { word: "Star", icon: "star" },
+  { word: "Water", icon: "water" },
+  { word: "Flower", icon: "flower" },
+  { word: "Tree", icon: "leaf" },
+  { word: "Cat", icon: "paw" },
+  { word: "Dog", icon: "paw" },
+  { word: "Apple", icon: "nutrition" },
+  { word: "Pizza", icon: "pizza" },
+  { word: "Ice Cream", icon: "ice-cream" },
+];
 
 export default function GamePronunciation() {
   const router = useRouter();
+
   const [restartCount, setRestartCount] = useState(0);
   const [completedWords, setCompletedWords] = useState<string[]>([]);
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
 
-  // 1. Get 10 random words from common data
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 4 : 2;
+  const GAP = 16;
+  const PADDING = 16;
+  const itemWidth = (width - (PADDING * 2) - (GAP * (numColumns - 1))) / numColumns;
+
+  /* ---------------- INSTRUCTIONS ---------------- */
+
+  const { play: playInstruction } = useInstruction(
+    "pronunciation-game",
+    "Tap the microphone and say the word shown on the card."
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => Speech.stop();
+    }, [])
+  );
+
+  /* ---------------- GAME WORDS ---------------- */
+
   const gameItems = useMemo(() => {
-    // Flatten all examples from vowelSections
-    const allExamples = vowelSections.flatMap(section => section.examples);
-    // Filter items that have icons (most do, but safety check)
-    const validItems = allExamples.filter(item => item.icon);
-    
-    // Shuffle and pick 10
-    const shuffled = [...validItems].sort(() => 0.5 - Math.random());
+    const shuffled = [...GAME_WORDS].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 10);
   }, [restartCount]);
 
-  const handleSuccess = (word: string) => {
-    if (!completedWords.includes(word)) {
-      const newCompleted = [...completedWords, word];
-      setCompletedWords(newCompleted);
+  /* ---------------- RESULT HANDLERS ---------------- */
 
-      // Check if game finished
-      if (newCompleted.length === gameItems.length) {
-        setTimeout(async () => {
-          setShowResult(true);
-          const score = 10 - mistakes.size;
-          const passed = score >= 6;
-          Speech.speak(passed ? "Congratulations! You passed!" : "Good try! Practice more.", { rate: 0.95 });
-          
-          await addResult({
-            activityId: "pronunciation-game",
-            category: "game",
-            score: Math.max(0, score * 10), // Scale to 100
-            maxScore: 100,
-            completed: true,
-          });
-        }, 1000);
-      }
+  const handleSuccess = (word: string) => {
+    if (completedWords.includes(word)) return;
+
+    const updated = [...completedWords, word];
+    setCompletedWords(updated);
+
+    if (updated.length === gameItems.length) {
+      setTimeout(async () => {
+        setShowResult(true);
+        const score = 10 - mistakes.size;
+        const passed = score >= 6;
+
+        Speech.stop();
+
+        if (passed) {
+          speakPraise("Congratulations! You passed!");
+        } else {
+          speakCorrection("Good try! Practice more.");
+        }
+
+        await addResult({
+          activityId: "pronunciation-game",
+          category: "game",
+          score: Math.max(0, score),
+          maxScore: 10,
+          completed: true,
+        });
+      }, 800);
     }
   };
 
   const handleFailure = (word: string) => {
-    if (!completedWords.includes(word)) {
-        setMistakes(prev => new Set(prev).add(word));
-    }
+    setMistakes(prev => new Set(prev).add(word));
   };
 
   const handleRestart = () => {
+    Speech.stop();
     setCompletedWords([]);
     setMistakes(new Set());
     setShowResult(false);
-    setRestartCount(prev => prev + 1);
-    Speech.stop();
+    setRestartCount(c => c + 1);
   };
 
   const handleExit = () => {
     Speech.stop();
-    setShowResult(false);
-    // Route back to games screen (assuming /games is the route, or home if games is on home)
-    // User requested "route back to the Games screen". 
-    // If /games exists as a file (app/games.tsx), this works.
-    router.replace('/games');
+    router.replace("/games");
   };
+
+  /* ---------------- UI ---------------- */
 
   return (
     <LinearGradient colors={["#FFF3E0", "#FFCCBC"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" />
-        
-        <View style={styles.header}>
-          <BackButton targetRoute="/games" color="#3E2723" />
-          <Text style={styles.title}>Speak It!</Text>
-          <View style={styles.scoreBadge}>
-             <Text style={styles.scoreText}>{completedWords.length} / 10</Text>
+        <OfflineGuard>
+          <StatusBar barStyle="dark-content" />
+
+          <View style={styles.header}>
+            <BackButton targetRoute="/games" color="#3E2723" />
+            <InstructionButton onPress={playInstruction} />
+            <Text style={styles.title}>Speak It!</Text>
           </View>
-        </View>
 
-        <Text style={styles.subtitle}>Tap the mic and say the word!</Text>
+          <Text style={styles.subtitle}>
+            Tap the mic and say the word
+          </Text>
 
-        <FlatList
-          data={gameItems}
-          keyExtractor={(item, index) => `${item.word}-${index}`}
-          numColumns={2}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          columnWrapperStyle={styles.columnWrapper}
-          renderItem={({ item }) => (
-            <GameWordCard 
-              word={item.word}
-              icon={item.icon}
-              color={completedWords.includes(item.word) ? "#E8F5E9" : "#FFF"}
-              onSuccess={() => handleSuccess(item.word)}
-              onFailure={() => handleFailure(item.word)}
-              disabled={completedWords.includes(item.word)}
-            />
-          )}
-        />
+          <FlatList
+            data={gameItems}
+            keyExtractor={(item, i) => `${item.word}-${i}`}
+            key={numColumns} // Force re-render on column change
+            numColumns={numColumns}
+            contentContainerStyle={styles.listContainer}
+            columnWrapperStyle={[styles.columnWrapper, { gap: GAP }]}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <GameWordCard
+                  word={item.word}
+                  icon={item.icon}
+                  disabled={completedWords.includes(item.word)}
+                  color={
+                    completedWords.includes(item.word) ? "#E8F5E9" : "#FFF"
+                  }
+                  style={{ width: itemWidth, margin: 0 }}
+                  onSuccess={() => handleSuccess(item.word)}
+                  onFailure={() => handleFailure(item.word)}
+                />
+            )}
+          />
 
-        {/* Result Popup */}
-        <Modal visible={showResult} transparent={true} animationType="fade">
+          {/* ---------------- RESULT MODAL ---------------- */}
+
+          <Modal visible={showResult} transparent animationType="fade" onRequestClose={handleExit}>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Game Complete!</Text>
-                
-                <View style={styles.scoreContainer}>
-                  <Text style={styles.scoreLabel}>Your Score</Text>
-                  <Text style={styles.scoreValue}>{Math.max(0, 10 - mistakes.size)} / 10</Text>
-                </View>
 
-                <View style={[styles.resultBadge, (10 - mistakes.size) >= 6 ? styles.resultPass : styles.resultFail]}>
-                  <Ionicons 
-                    name={(10 - mistakes.size) >= 6 ? "checkmark-circle" : "close-circle"} 
-                    size={32} 
-                    color="#FFF" 
-                  />
-                  <Text style={styles.resultText}>
-                    {(10 - mistakes.size) >= 6 ? "PASSED" : "FAILED"}
-                  </Text>
-                </View>
+                <Text style={styles.scoreValue}>
+                  {Math.max(0, 10 - mistakes.size)} / 10
+                </Text>
 
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity style={[styles.modalButton, styles.tryAgainButton]} onPress={handleRestart}>
-                    <Ionicons name="refresh" size={24} color="#FFF" />
+                  <TouchableOpacity
+                    style={styles.tryAgainButton}
+                    onPress={handleRestart}
+                  >
                     <Text style={styles.modalButtonText}>TRY AGAIN</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={[styles.modalButton, styles.exitButton]} onPress={handleExit}>
-                    <Ionicons name="exit" size={24} color="#FFF" />
+                  <TouchableOpacity
+                    style={styles.exitButton}
+                    onPress={handleExit}
+                  >
                     <Text style={styles.modalButtonText}>EXIT</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             </View>
-        </Modal>
-
+          </Modal>
+        </OfflineGuard>
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
+/* ---------------- STYLES ---------------- */
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   safeArea: {
     flex: 1,
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
@@ -163,130 +209,71 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     padding: 16,
   },
   title: {
+    flex: 1,
+    textAlign: "center",
     fontSize: 24,
     fontWeight: "800",
     color: "#BF360C",
-    flex: 1,
-    textAlign: "center",
-    paddingRight: 40, // Balance back button
   },
   scoreBadge: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FFF",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    elevation: 2,
   },
-  scoreText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#BF360C",
-  },
+  scoreText: { fontWeight: "700", color: "#BF360C" },
   subtitle: {
     textAlign: "center",
     fontSize: 18,
-    color: "#5D4037",
     marginBottom: 16,
+    color: "#5D4037",
     fontWeight: "600",
   },
-  listContainer: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  columnWrapper: {
-    justifyContent: "space-between",
-  },
-  // Modal Styles
+  listContainer: { padding: 16 },
+  columnWrapper: { justifyContent: "flex-start" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20
   },
   modalContent: {
     backgroundColor: "#FFF",
-    borderRadius: 24,
     padding: 24,
-    width: "100%",
-    maxWidth: 400,
+    borderRadius: 20,
+    width: "90%",
+    maxWidth: 500,
     alignItems: "center",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4
   },
   modalTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "800",
-    color: "#3E2723",
-    marginBottom: 20
-  },
-  scoreContainer: {
-    alignItems: "center",
-    marginBottom: 20
-  },
-  scoreLabel: {
-    fontSize: 16,
-    color: "#757575",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 1
+    marginBottom: 10,
   },
   scoreValue: {
     fontSize: 48,
     fontWeight: "900",
-    color: "#3E2723"
-  },
-  resultBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 50,
-    marginBottom: 32,
-    gap: 10
-  },
-  resultPass: {
-    backgroundColor: "#4CAF50"
-  },
-  resultFail: {
-    backgroundColor: "#F44336"
-  },
-  resultText: {
-    color: "#FFF",
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 1
+    marginVertical: 16,
   },
   modalButtons: {
     flexDirection: "row",
-    gap: 16,
-    width: "100%"
-  },
-  modalButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 8
+    gap: 12,
   },
   tryAgainButton: {
-    backgroundColor: "#2196F3"
+    backgroundColor: "#2196F3",
+    padding: 16,
+    borderRadius: 14,
   },
   exitButton: {
-    backgroundColor: "#FF5722"
+    backgroundColor: "#FF5722",
+    padding: 16,
+    borderRadius: 14,
   },
   modalButtonText: {
     color: "#FFF",
-    fontSize: 16,
-    fontWeight: "800"
-  }
+    fontWeight: "800",
+  },
 });

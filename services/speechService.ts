@@ -24,27 +24,38 @@ export const speechService = {
 
   startRecording: async () => {
     try {
+      if (speechService.recording) {
+        await speechService.stopRecording();
+      }
+
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
 
-      // Google STT prefers LINEAR16 (WAV) or high quality encoding.
-      // We'll use High Quality presets which are generally compatible (M4A/AAC on Android, CAF/WAV on iOS).
-      // For best Google Cloud compatibility, we send the content as base64.
+      // Google STT prefers LINEAR16 (WAV) or AMR_WB.
+      // AAC (m4a) is often problematic with synchronous recognition.
+      // We use AMR_WB for Android (widely supported by Google STT) and WAV for iOS.
       const recordingOptions: Audio.RecordingOptions = {
         ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
         android: {
-          ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          extension: '.amr',
+          outputFormat: Audio.AndroidOutputFormat.AMR_WB,
+          audioEncoder: Audio.AndroidAudioEncoder.AMR_WB,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 23850,
         },
         ios: {
-          ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
           extension: '.wav',
           outputFormat: Audio.IOSOutputFormat.LINEARPCM,
           audioQuality: Audio.IOSAudioQuality.MAX,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 256000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
         },
       };
 
@@ -61,9 +72,11 @@ export const speechService = {
     try {
       if (!speechService.recording) return null;
       
-      await speechService.recording.stopAndUnloadAsync();
-      const uri = speechService.recording.getURI();
-      speechService.recording = null;
+      const recording = speechService.recording;
+      speechService.recording = null; // Clear reference immediately
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
       return uri;
     } catch (error) {
       console.error('Error stopping recording:', error);
@@ -82,6 +95,11 @@ export const speechService = {
         encoding: 'base64',
       });
 
+      // Determine encoding based on file extension
+      const isWav = uri.endsWith('.wav');
+      const encoding = isWav ? 'LINEAR16' : 'AMR_WB';
+      const sampleRateHertz = 16000;
+
       const response = await fetch(
         `https://speech.googleapis.com/v1/speech:recognize?key=${GOOGLE_API_KEY}`,
         {
@@ -92,13 +110,10 @@ export const speechService = {
           body: JSON.stringify({
             config: {
               languageCode: "en-US",
+              encoding: encoding,
+              sampleRateHertz: sampleRateHertz,
               enableAutomaticPunctuation: false,
               enableWordConfidence: true,
-              // We infer encoding from file if possible, or use defaults.
-              // For generic audio files (m4a, wav), 'ENCODING_UNSPECIFIED' is safest if strictly linear16 isn't guaranteed.
-              // However, if we sent WAV (iOS), LINEAR16 works. If AAC (Android), we might need FLAC or MP3.
-              // Google Cloud STT now supports more formats.
-              // Let's try minimal config that works for standard Expo output.
             },
             audio: {
               content: fileBase64,

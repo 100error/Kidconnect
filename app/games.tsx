@@ -1,4 +1,5 @@
 import GradientButton from "@/components/GradientButton";
+import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -139,29 +140,31 @@ export default function Games() {
       resizeMode="cover"
     >
       <SafeAreaView style={styles.safeArea}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <BackButton targetRoute="/home" />
+        <OfflineGuard>
+          {/* HEADER */}
+          <View style={styles.header}>
+            <BackButton targetRoute="/home" />
 
-          <Text style={styles.title}>GAMES</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+            <Text style={styles.title}>GAMES</Text>
+            <View style={styles.headerSpacer} />
+          </View>
 
-        {/* GAMES LIST */}
-        <FlatList
-          data={games}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <GradientButton
-              title={item.title}
-              icon={item.icon}
-              colors={item.colors}
-              onPress={() => playClickAndNavigate(item.screen)}
-            />
-          )}
-        />
+          {/* GAMES LIST */}
+          <FlatList
+            data={games}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <GradientButton
+                title={item.title}
+                icon={item.icon}
+                colors={item.colors}
+                onPress={() => playClickAndNavigate(item.screen)}
+              />
+            )}
+          />
+        </OfflineGuard>
       </SafeAreaView>
     </ImageBackground>
   );

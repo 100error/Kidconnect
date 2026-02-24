@@ -39,7 +39,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
 
   const handleProfilePress = () => {
     onClose();
-    router.push('/profile');
+    router.push('/profile' as any);
   };
 
   return (

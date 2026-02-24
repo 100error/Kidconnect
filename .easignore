@@ -1,0 +1,19 @@
+# Git and dependencies
+.git/
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+
+# Unused large video assets
+assets/videos/k.mp4
+assets/videos/ko.mp4
+assets/videos/InShot_20260209_224253891.mp4
+assets/videos/home.mp4
+
+# Unused large audio assets
+assets/music/time.mp3
+assets/music/home.mp3
+assets/music/games.mp3

@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useState } from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 const nounLessons: NounLesson[] = [
   // Existing Categories

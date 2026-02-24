@@ -1,6 +1,8 @@
 import GradientButton from "@/components/GradientButton";
+import KicoMascot from "@/components/KicoMascot";
 import SettingsModal from "@/components/SettingsModal"; // Import Modal
 import TutorialOverlay from "@/components/TutorialOverlay";
+import { profileService } from "@/services/profile"; // Import Profile Service
 import { DailyProgress, getCurrent24hProgress, getDailyHistory, subscribeProgress } from "@/services/progress";
 import { settingsService } from "@/services/settings"; // Import Settings Service
 import { Ionicons } from "@expo/vector-icons";
@@ -273,6 +275,9 @@ const Home = () => {
               />
             </TouchableOpacity>
           </View>
+
+          {/* Mascot Animation */}
+          <KicoMascot />
 
           {/* Welcome Title */}
           <Text style={styles.welcomeText}>

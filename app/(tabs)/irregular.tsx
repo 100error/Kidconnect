@@ -242,7 +242,7 @@ export default function Irregular() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.introText}>
-          Tricky words that don't follow the rules!
+          Tricky words that don&apos;t follow the rules!
         </Text>
 
         {irregularGroups.map((group) => (
@@ -292,7 +292,7 @@ export default function Irregular() {
                         />
                     </View>
                     <View style={styles.divider} />
-                    <Text style={styles.exampleText}>"{item.example}"</Text>
+                    <Text style={styles.exampleText}>&quot;{item.example}&quot;</Text>
                 </TouchableOpacity>
               ))}
             </View>

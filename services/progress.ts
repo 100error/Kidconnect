@@ -92,9 +92,11 @@ const ACTIVITIES = [
   { id: "oddwordout", type: "single" as const },
   { id: "storyspeak", type: "single" as const },
   { id: "pronunciation-game", type: "single" as const },
+  { id: "causeeffect", type: "single" as const },
+  { id: "riddles", type: "single" as const },
   { id: "fixsentence", type: "multi" as const, count: 10 },
 ];
-
+ 
 function calculateCoverage(results: ActivityResult[]): number {
   if (results.length === 0) return 0;
 

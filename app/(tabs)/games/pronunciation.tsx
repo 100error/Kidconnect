@@ -5,7 +5,6 @@ import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from '@/hooks/useInstruction';
 import { addResult } from "@/services/progress";
 import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
-import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from "expo-speech";
@@ -14,27 +13,27 @@ import { FlatList, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, T
 
 /* ---------------- GAME DATA ---------------- */
 
-const GAME_WORDS: { word: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { word: "Happy", icon: "happy" },
-  { word: "Sad", icon: "sad" },
-  { word: "Run", icon: "walk" },
-  { word: "Jump", icon: "arrow-up-circle" },
-  { word: "Sleep", icon: "bed" },
-  { word: "Eat", icon: "restaurant" },
-  { word: "Ball", icon: "football" },
-  { word: "Book", icon: "book" },
-  { word: "Car", icon: "car" },
-  { word: "House", icon: "home" },
-  { word: "Sun", icon: "sunny" },
-  { word: "Star", icon: "star" },
-  { word: "Water", icon: "water" },
-  { word: "Flower", icon: "flower" },
-  { word: "Tree", icon: "leaf" },
-  { word: "Cat", icon: "paw" },
-  { word: "Dog", icon: "paw" },
-  { word: "Apple", icon: "nutrition" },
-  { word: "Pizza", icon: "pizza" },
-  { word: "Ice Cream", icon: "ice-cream" },
+const GAME_WORDS: { word: string; image: any }[] = [ 
+  { word: "Apple", image: require("@/assets/gamepronounce/apple.png") },
+  { word: "Baby", image: require("@/assets/gamepronounce/baby.png") },
+  { word: "Ball", image: require("@/assets/gamepronounce/ball.png") },
+  { word: "Book", image: require("@/assets/gamepronounce/book.png") }, 
+  { word: "Car", image: require("@/assets/gamepronounce/car.png") },
+  { word: "Cat", image: require("@/assets/gamepronounce/cat.png") },
+  { word: "Dog", image: require("@/assets/gamepronounce/dog.png") },
+  { word: "Happy", image: require("@/assets/gamepronounce/happy.png") },
+  { word: "House", image: require("@/assets/gamepronounce/house.png") },
+  { word: "Ice Cream", image: require("@/assets/gamepronounce/icecream.png") },
+  { word: "Jump", image: require("@/assets/gamepronounce/jump.png") },
+  { word: "Pizza", image: require("@/assets/gamepronounce/pizza.png") },
+  { word: "Run", image: require("@/assets/gamepronounce/run.png") },
+  { word: "Sad", image: require("@/assets/gamepronounce/sad.png") },
+  { word: "Sleep", image: require("@/assets/gamepronounce/sleep.png") },
+  { word: "Star", image: require("@/assets/gamepronounce/star.png") },
+  { word: "Sun", image: require("@/assets/gamepronounce/sun.png") },
+  { word: "Tree", image: require("@/assets/gamepronounce/tree.png") },
+  { word: "Water", image: require("@/assets/gamepronounce/water.png") },
+  { word: "Flowers", image: require("@/assets/gamepronounce/flowers.png") },
 ];
 
 export default function GamePronunciation() {
@@ -151,7 +150,7 @@ export default function GamePronunciation() {
             renderItem={({ item }) => (
               <GameWordCard
                   word={item.word}
-                  icon={item.icon}
+                  image={item.image}
                   disabled={completedWords.includes(item.word)}
                   color={
                     completedWords.includes(item.word) ? "#E8F5E9" : "#FFF"

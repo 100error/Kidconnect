@@ -1,6 +1,8 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from '@/hooks/useInstruction';
+import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -8,13 +10,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
 type SentenceItem = {
   id: string;
   jumbled: string;
   correct: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  image: any;
 };
 
 
@@ -30,24 +32,54 @@ export default function Fixsentence() {
   
   // Static data
   const rawSentenceData: SentenceItem[] = [
-    { id: "1", jumbled: "dog The brown is fast", correct: "The brown dog is fast.", icon: "paw" },
-    { id: "2", jumbled: "ate I banana a", correct: "I ate a banana.", icon: "nutrition" },
-    { id: "3", jumbled: "blue The sky is", correct: "The sky is blue.", icon: "cloud" },
-    { id: "4", jumbled: "runs boy The fast very", correct: "The boy runs very fast.", icon: "walk" },
-    { id: "5", jumbled: "cat The sleeping is", correct: "The cat is sleeping.", icon: "bed" },
-    { id: "6", jumbled: "book reading I am a", correct: "I am reading a book.", icon: "book" },
-    { id: "7", jumbled: "sun The hot is", correct: "The sun is hot.", icon: "sunny" },
-    { id: "8", jumbled: "ball playing They are with a", correct: "They are playing with a ball.", icon: "football" },
-    { id: "9", jumbled: "school to go I", correct: "I go to school.", icon: "school" },
-    { id: "10", jumbled: "happy very am I", correct: "I am very happy.", icon: "happy" }
+    { id: "1", jumbled: "dog The brown is fast", correct: "The brown dog is fast.",    
+    image: require("@/assets/fixsentence/running.png") },
+    { id: "2", jumbled: "ate I banana a", correct: "I ate a banana.",                    
+    image: require("@/assets/fixsentence/eating.png") },
+    { id: "3", jumbled: "blue The sky is", correct: "The sky is blue.", 
+    image: require("@/assets/fixsentence/blue.png") },
+    { id: "4", jumbled: "runs boy The fast very", correct: "The boy runs very fast.", 
+    image: require("@/assets/fixsentence/run.png") },
+    { id: "5", jumbled: "cat The sleeping is",correct: "The cat is sleeping.", 
+    image: require("@/assets/fixsentence/napping.png") },
+    { id: "6",  jumbled: "book reading I am a", correct: "I am reading a book.", 
+    image: require("@/assets/fixsentence/reading.png") },
+    { id: "7",  jumbled: "sun The hot is", correct: "The sun is hot.", 
+    image: require("@/assets/fixsentence/hot.png") },
+    { id: "8",  jumbled: "ball playing They are with a", correct: "They are playing with a ball.", 
+    image: require("@/assets/fixsentence/playingball.png") },
+    { id: "9",  jumbled: "school to go I", correct: "I go to school.", 
+    image: require("@/assets/fixsentence/student.png") },
+    { id: "10", jumbled: "happy very am I", correct: "I am very happy.", 
+    image: require("@/assets/fixsentence/happy.png") },
+    { id: "11", jumbled: "big The dog is", correct: "The dog is big.", 
+    image: require("@/assets/fixsentence/bigdog.png") },
+    { id: "12", jumbled: "sun The bright is", correct: "The sun is bright.", 
+    image: require("@/assets/fixsentence/sun.png") },
+    { id: "13", jumbled: "telephone The ringing is", correct: "The telephone is ringing.", 
+      image: require("@/assets/fixsentence/telephone.png") },
+    { id: "14", jumbled: "tall The tree is", correct: "The tree is tall.", 
+    image: require("@/assets/fixsentence/tree.png") },
+    { id: "15", jumbled: "fast The car is", correct: "The car is fast.", 
+    image: require("@/assets/fixsentence/racing.png") },
+    { id: "16", jumbled: "cold The water is", correct: "The water is cold.", 
+    image: require("@/assets/fixsentence/water.png") },
+    { id: "17", jumbled: "bright The sun is", correct: "The sun is bright.", 
+    image: require("@/assets/fixsentence/sun.png") },
+    { id: "18", jumbled: "sweet The cake is", correct: "The cake is sweet.", 
+    image: require("@/assets/fixsentence/cake.png") },
+    { id: "19", jumbled: "clean The room is", correct: "The room is clean.", 
+    image: require("@/assets/fixsentence/room.png") },
+    { id: "20", jumbled: "new The bag is", correct: "The bag is new.", 
+    image: require("@/assets/fixsentence/bag.png") }
   ];
 
   const [sentenceData, setSentenceData] = useState<SentenceItem[]>([]);
-
+  
   // Randomize on mount
   useEffect(() => {
     const shuffled = [...rawSentenceData].sort(() => 0.5 - Math.random());
-    setSentenceData(shuffled);
+    setSentenceData(shuffled.slice(0, 10));
   }, []);
 
   // Audio Guidance
@@ -134,8 +166,9 @@ export default function Fixsentence() {
             setCompletedIds(newCompleted);
             setFeedbackState({ ...feedbackState, [item.id]: "correct" });
             
-            Speech.stop();
-            Speech.speak("Correct! " + item.correct, { rate: 0.95, pitch: 1.1 });
+            playbackService.playSound("correct");
+            TTS.speak("Correct!", { rate: 0.95, pitch: 1.1 });
+            TTS.speak(item.correct, { rate: 0.9, pitch: 1.0 });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
             await addResult({
@@ -159,8 +192,8 @@ export default function Fixsentence() {
         // Incorrect
         setFeedbackState({ ...feedbackState, [item.id]: "incorrect" });
         setMistakes(prev => new Set(prev).add(item.id));
-        Speech.stop();
-        Speech.speak("Try again", { rate: 0.95, pitch: 1.1 });
+        playbackService.playSound("incorrect");
+        TTS.speak("Try again", { rate: 0.95, pitch: 1.1 });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -204,7 +237,7 @@ export default function Fixsentence() {
                     {/* Top Section: Image + Sentence Slots */}
                     <View style={styles.cardHeader}>
                         <View style={styles.imageContainer}>
-                            <Ionicons name={item.icon} size={40} color="#0288D1" />
+                            <Image source={item.image} style={{ width: 40, height: 40 }} resizeMode="contain" />
                         </View>
                         
                         <TouchableOpacity 

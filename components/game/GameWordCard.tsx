@@ -2,15 +2,16 @@ import { playbackService } from "@/services/audio/playback";
 import { ensureMicPermission } from "@/services/mic";
 import { speechService } from "@/services/speechService";
 import { addAttempt } from "@/services/speechlog";
-import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
+import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface GameWordCardProps {
   word: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  image?: ImageSourcePropType;
   color?: string;
   onSuccess?: () => void;
   onFailure?: () => void;
@@ -21,6 +22,7 @@ interface GameWordCardProps {
 export default function GameWordCard({
   word,
   icon = "text",
+  image,
   color = "#FFF",
   onSuccess,
   onFailure,
@@ -38,7 +40,7 @@ export default function GameWordCard({
 
   const handleSpeak = () => {
     if (!isListening) {
-      speakPraise(word); // Just speak the word
+      TTS.speak(word, { rate: 0.9, pitch: 1.1 });
     }
   };
 
@@ -56,13 +58,13 @@ export default function GameWordCard({
             setFeedback("correct");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             playbackService.playSound("correct");
-            speakPraise("Good job!");
+            TTS.speak("Correct!", { rate: 0.9, pitch: 1.1 });
             if (onSuccess) onSuccess();
         } else {
             setFeedback("incorrect");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             playbackService.playSound("incorrect");
-            speakCorrection("Try again");
+            TTS.speak("Try again.", { rate: 0.9, pitch: 1.1 });
             if (onFailure) onFailure();
             setTimeout(() => setFeedback("idle"), 1500);
         }
@@ -129,7 +131,11 @@ export default function GameWordCard({
         activeOpacity={0.7}
       >
         <View style={styles.iconContainer}>
-            <Ionicons name={feedback === "correct" ? "checkmark-circle" : icon} size={48} color={feedback === "correct" ? "#4CAF50" : "#5D4037"} />
+            {image ? (
+              <Image source={image} style={styles.iconImage} resizeMode="contain" />
+            ) : (
+              <Ionicons name={feedback === "correct" ? "checkmark-circle" : icon} size={48} color={feedback === "correct" ? "#4CAF50" : "#5D4037"} />
+            )}
         </View>
         <Text style={styles.word}>{word}</Text>
       </TouchableOpacity>
@@ -176,6 +182,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#E0E0E0",
     minHeight: 160,
+  },
+  iconImage: {
+    width: 56,
+    height: 56,
   },
   cardCorrect: {
     borderColor: "#4CAF50",

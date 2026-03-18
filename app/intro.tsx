@@ -86,7 +86,7 @@ export default function Intro() {
 
   return (
     <ImageBackground
-      source={require("../assets/in.png")}
+      source={require("@/assets/in.png")}
       style={styles.container}
       resizeMode="cover"
     >

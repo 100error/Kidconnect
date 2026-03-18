@@ -1,6 +1,4 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Device from 'expo-device';
-import { Platform } from 'react-native';
 
 const PROFILE_FILE = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}profile.json`;
 
@@ -61,6 +59,27 @@ export const profileService = {
       return newProfile;
     } catch (error) {
       console.error('Error saving profile:', error);
+      throw error;
+    }
+  },
+
+  async updateProfile(username: string, avatarId: string): Promise<UserProfile> {
+    try {
+      const currentProfile = await this.getProfile();
+      if (!currentProfile) {
+        throw new Error("No profile to update");
+      }
+
+      const updatedProfile: UserProfile = {
+        ...currentProfile,
+        username,
+        avatarId,
+      };
+
+      await FileSystem.writeAsStringAsync(PROFILE_FILE, JSON.stringify(updatedProfile));
+      return updatedProfile;
+    } catch (error) {
+      console.error('Error updating profile:', error);
       throw error;
     }
   },

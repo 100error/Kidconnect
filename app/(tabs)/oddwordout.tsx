@@ -3,11 +3,12 @@ import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from '@/components/ui/BackButton';
 import { useInstruction } from '@/hooks/useInstruction';
 import { playbackService } from '@/services/audio/playback';
+import { TTS } from '@/services/audio/tts';
 import { ensureMicPermission } from '@/services/mic';
 import { addResult } from '@/services/progress';
 import { addAttempt } from '@/services/speechlog';
 import { speechService } from '@/services/speechService';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -17,24 +18,25 @@ import {
   Modal,
   Platform,
   SafeAreaView,
-  StatusBar,
+  StatusBar, 
   StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
-  View
+  View,
+  Image
 } from 'react-native';
 // --- Types ---
 type Option = {
   id: string;
   word: string;
-  icon: string; // MaterialCommunityIcons name
+  image: any;
   isOdd: boolean;
 };
 
 type Question = {
   id: string;
-  options: Option[];
+  options: Option[]; 
 };
 
 // --- Data ---
@@ -42,91 +44,92 @@ const QUESTIONS: Question[] = [
   {
     id: 'q1',
     options: [
-      { id: '1a', word: 'Apple', icon: 'food-apple', isOdd: false },
-      { id: '1b', word: 'Banana', icon: 'fruit-cherries', isOdd: false }, // using cherries as generic fruit placeholder
-      { id: '1c', word: 'Grapes', icon: 'fruit-grapes', isOdd: false },
-      { id: '1d', word: 'Carrot', icon: 'carrot', isOdd: true },
+      { id: '1a', word: 'Apple', image: require('@/assets/oddwordout/apple.png'), isOdd: false },
+      { id: '1b', word: 'Banana', image: require('@/assets/oddwordout/banana.png'), isOdd: false },
+      { id: '1c', word: 'Grapes', image: require('@/assets/oddwordout/grapes.png'), isOdd: false },
+      { id: '1d', word: 'Carrot', image: require('@/assets/oddwordout/carrot.png'), isOdd: true },
     ]
   },
   {
-    id: 'q2',
+    id: 'q2', 
     options: [
-      { id: '2a', word: 'Cat', icon: 'cat', isOdd: false },
-      { id: '2b', word: 'Dog', icon: 'dog', isOdd: false },
-      { id: '2c', word: 'Cow', icon: 'cow', isOdd: false },
-      { id: '2d', word: 'Bus', icon: 'bus', isOdd: true },
+      { id: '2a', word: 'Cat', image: require('@/assets/oddwordout/cat.png'), isOdd: false },
+      { id: '2b', word: 'Dog', image: require('@/assets/oddwordout/dog.png'), isOdd: false },
+      { id: '2c', word: 'Cow', image: require('@/assets/oddwordout/cow.png'), isOdd: false },
+      { id: '2d', word: 'Bus', image: require('@/assets/oddwordout/bus.png'), isOdd: true },
     ]
   },
   {
     id: 'q3',
     options: [
-      { id: '3a', word: 'Red', icon: 'palette', isOdd: false },
-      { id: '3b', word: 'Blue', icon: 'water', isOdd: false },
-      { id: '3c', word: 'Green', icon: 'grass', isOdd: false },
-      { id: '3d', word: 'Chair', icon: 'chair-school', isOdd: true },
+      { id: '3a', word: 'Red', image: require('@/assets/oddwordout/red.png'), isOdd: false },
+      { id: '3b', word: 'Blue', image: require('@/assets/oddwordout/blue.png'), isOdd: false },
+      { id: '3c', word: 'Green', image: require('@/assets/oddwordout/green.png'), isOdd: false },
+      { id: '3d', word: 'Chair', image: require('@/assets/oddwordout/chair.png'), isOdd: true },
     ]
   },
   {
     id: 'q4',
     options: [
-      { id: '4a', word: 'One', icon: 'numeric-1-box', isOdd: false },
-      { id: '4b', word: 'Two', icon: 'numeric-2-box', isOdd: false },
-      { id: '4c', word: 'Three', icon: 'numeric-3-box', isOdd: false },
-      { id: '4d', word: 'A', icon: 'alpha-a-box', isOdd: true },
+      { id: '4a', word: 'One', image: require('@/assets/oddwordout/one.png'), isOdd: false },
+      { id: '4b', word: 'Two', image: require('@/assets/oddwordout/two.png'), isOdd: false },
+      { id: '4c', word: 'Three', image: require('@/assets/oddwordout/3.png'), isOdd: false },
+      { id: '4d', word: 'A', image: require('@/assets/oddwordout/alphabet.png'), isOdd: true },
     ]
   },
   {
     id: 'q5',
     options: [
-      { id: '5a', word: 'Eye', icon: 'eye', isOdd: false },
-      { id: '5b', word: 'Ear', icon: 'ear-hearing', isOdd: false },
-      { id: '5c', word: 'Nose', icon: 'emoticon-outline', isOdd: false },
-      { id: '5d', word: 'Shirt', icon: 'tshirt-crew', isOdd: true },
+      { id: '5a', word: 'Eyes', image: require('@/assets/oddwordout/eyes.png'), isOdd: false },
+      { id: '5b', word: 'Ear', image: require('@/assets/oddwordout/ear.png'), isOdd: false },
+      { id: '5c', word: 'Nose', image: require('@/assets/oddwordout/nose.png'), isOdd: false },
+      { id: '5d', word: 'Shirt', image: require('@/assets/oddwordout/shirt.png'), isOdd: true },
     ]
   },
   {
     id: 'q6',
     options: [
-      { id: '6a', word: 'Circle', icon: 'circle-outline', isOdd: false },
-      { id: '6b', word: 'Square', icon: 'square-outline', isOdd: false },
-      { id: '6c', word: 'Triangle', icon: 'triangle-outline', isOdd: false },
-      { id: '6d', word: 'Pizza', icon: 'pizza', isOdd: true },
+      { id: '6a', word: 'Circle', image: require('@/assets/oddwordout/circle.png'), isOdd: false },
+      { id: '6b', word: 'Square', image: require('@/assets/oddwordout/square.png'), isOdd: false },
+      { id: '6c', word: 'Triangle', image: require('@/assets/oddwordout/triangle.png'), isOdd: false },
+      { id: '6d', word: 'Pizza', image: require('@/assets/oddwordout/pizza.png'), 
+      isOdd: true },
     ]
   },
   {
     id: 'q7',
     options: [
-      { id: '7a', word: 'Sun', icon: 'weather-sunny', isOdd: false },
-      { id: '7b', word: 'Rain', icon: 'weather-rainy', isOdd: false },
-      { id: '7c', word: 'Snow', icon: 'weather-snowy', isOdd: false },
-      { id: '7d', word: 'Pig', icon: 'pig', isOdd: true },
+      { id: '7a', word: 'Sun', image: require('@/assets/oddwordout/sun.png'), isOdd: false },
+      { id: '7b', word: 'Rain', image: require('@/assets/oddwordout/rain.png'), isOdd: false },
+      { id: '7c', word: 'Snow', image: require('@/assets/oddwordout/snow.png'), isOdd: false },
+      { id: '7d', word: 'Pig', image: require('@/assets/oddwordout/pig.png'), isOdd: true },
     ]
   },
   {
     id: 'q8',
     options: [
-      { id: '8a', word: 'Pen', icon: 'pen', isOdd: false },
-      { id: '8b', word: 'Book', icon: 'book-open-variant', isOdd: false },
-      { id: '8c', word: 'Desk', icon: 'desk', isOdd: false },
-      { id: '8d', word: 'Ball', icon: 'soccer', isOdd: true },
+      { id: '8a', word: 'Pen', image: require('@/assets/oddwordout/pen.png'), isOdd: false },
+      { id: '8b', word: 'Book', image: require('@/assets/oddwordout/book.png'), isOdd: false },
+      { id: '8c', word: 'Desk', image: require('@/assets/oddwordout/desk.png'), isOdd: false },
+      { id: '8d', word: 'Ball', image: require('@/assets/oddwordout/ball.png'), isOdd: true },
     ]
   },
   {
     id: 'q9',
     options: [
-      { id: '9a', word: 'Bed', icon: 'bed', isOdd: false },
-      { id: '9b', word: 'Lamp', icon: 'lamp', isOdd: false },
-      { id: '9c', word: 'Sofa', icon: 'sofa', isOdd: false },
-      { id: '9d', word: 'Tree', icon: 'tree', isOdd: true },
+      { id: '9a', word: 'Bed', image: require('@/assets/oddwordout/bed.png'), isOdd: false },
+      { id: '9b', word: 'Lamp', image: require('@/assets/oddwordout/lamp.png'), isOdd: false },
+      { id: '9c', word: 'Sofa', image: require('@/assets/oddwordout/sofa.png'), isOdd: false },
+      { id: '9d', word: 'Tree', image: require('@/assets/oddwordout/tree.png'), isOdd: true },
     ]
-  },
+  }, 
   {
     id: 'q10',
     options: [
-      { id: '10a', word: 'Water', icon: 'water', isOdd: false },
-      { id: '10b', word: 'Milk', icon: 'bottle-soda', isOdd: false },
-      { id: '10c', word: 'Juice', icon: 'glass-cocktail', isOdd: false },
-      { id: '10d', word: 'Bread', icon: 'bread-slice', isOdd: true },
+      { id: '10a', word: 'Water', image: require('@/assets/oddwordout/water.png'), isOdd: false },
+      { id: '10b', word: 'Milk', image: require('@/assets/oddwordout/milk.png'), isOdd: false },
+      { id: '10c', word: 'Juice', image: require('@/assets/oddwordout/juice.png'), isOdd: false },
+      { id: '10d', word: 'Breads', image: require('@/assets/oddwordout/breads.png'), isOdd: true },
     ]
   },
 ];
@@ -184,8 +187,7 @@ export default function OddWordOutScreen() {
   };
 
   const speak = (text: string) => {
-    Speech.stop();
-    Speech.speak(text, { rate: 0.8, pitch: 1.1 });
+    TTS.speak(text, { rate: 0.9, pitch: 1.1 });
   };
 
   // --- Voice Setup ---
@@ -297,7 +299,7 @@ export default function OddWordOutScreen() {
     setFeedbackType('success');
     setScore(s => s + 1);
     playSound('correct');
-    speak('Great job!');
+    TTS.speak('Correct!', { rate: 0.9, pitch: 1.1 });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     setTimeout(() => {
@@ -309,7 +311,7 @@ export default function OddWordOutScreen() {
     setFeedbackMessage(`${selectedOption?.word} belongs here! Find the odd one.`);
     setFeedbackType('error');
     playSound('wrong');
-    speak(`${selectedOption?.word} belongs here. Try finding the odd one.`);
+    TTS.speak('Try again.', { rate: 0.9, pitch: 1.1 });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     // Allow retry, do not advance
     setSelectedOption(null);
@@ -393,11 +395,7 @@ export default function OddWordOutScreen() {
                       activeOpacity={0.8}
                     >
                       <View style={styles.iconCircle}>
-                        <MaterialCommunityIcons 
-                          name={opt.icon as any} 
-                          size={32} 
-                          color={isSelected ? '#FFF' : '#0288D1'} 
-                        />
+                        <Image source={opt.image} style={styles.optionImage} resizeMode="contain" />
                       </View>
                       <Text style={[
                         styles.optionText,
@@ -585,6 +583,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+  },
+  optionImage: {
+    width: 48,
+    height: 48,
   },
   optionText: {
     fontSize: 16,

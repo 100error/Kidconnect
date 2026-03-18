@@ -6,6 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
+import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
 import React, { useEffect, useState } from "react";
 import {
     Modal,
@@ -15,9 +17,9 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View, 
     useWindowDimensions
-} from "react-native";
+} from "react-native"; 
 
 // 1. Data Setup (Tenses: Present, Past, Future)
 const staticRawData = [
@@ -31,6 +33,16 @@ const staticRawData = [
   { id: "8", sentence: "I will ___ you tomorrow.", answer: "see" },
   { id: "9", sentence: "The duck ___ in the water.", answer: "swims" },
   { id: "10", sentence: "\"Hello,\" ___ the teacher.", answer: "said" },
+  { id: "11", sentence: "The baby ___ loudly.", answer: "cries" },
+  { id: "12", sentence: "I ___ my homework after school.", answer: "do" },
+  { id: "13", sentence: "She ___ a red dress.", answer: "wears" },
+  { id: "14", sentence: "We ___ in the park yesterday.", answer: "played" },
+  { id: "15", sentence: "The boy ___ a tall tree.", answer: "climbs" },
+  { id: "16", sentence: "They ___ milk every morning.", answer: "drink" },  
+  { id: "17", sentence: "I ___ a funny story.", answer: "heard" },
+  { id: "18", sentence: "The cat ___ on the sofa.", answer: "sleeps" },
+  { id: "19", sentence: "We ___ a movie last night.", answer: "watched" },
+  { id: "20", sentence: "She ___ a beautiful song.", answer: "sings" },   
 ];
 
 export default function SentenceBuild() {
@@ -104,8 +116,8 @@ export default function SentenceBuild() {
       const newCompleted = { ...completedSentences, [item.id]: selectedWord };
       setCompletedSentences(newCompleted);
       setSelectedWord(null);
-      Speech.stop();
-      Speech.speak("Good job!", { rate: 0.95 });
+      playbackService.playSound("correct");
+      TTS.speak("Correct!", { rate: 0.95 });
       
       // Check completion
       if (Object.keys(newCompleted).length === questions.length) {
@@ -113,8 +125,8 @@ export default function SentenceBuild() {
       }
     } else {
       // Incorrect
-      Speech.stop();
-      Speech.speak("Try again.", { rate: 0.95 });
+      playbackService.playSound("incorrect");
+      TTS.speak("Try again.", { rate: 0.95 });
       setMistakes(prev => new Set(prev).add(item.id));
     }
   };

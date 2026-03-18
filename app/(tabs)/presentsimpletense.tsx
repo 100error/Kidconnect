@@ -7,6 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
+import { playbackService } from '@/services/audio/playback';
+import { TTS } from '@/services/audio/tts';
 import React, { useEffect, useState } from 'react';
 import { Modal, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
@@ -31,7 +33,7 @@ const staticQuestions: Question[] = [
     options: ['has', 'have'], 
     correct: 'has',
     icon: 'restaurant'
-  },
+  }, 
   { 
     id: '2', 
     part1: 'Gemma', 
@@ -217,10 +219,12 @@ export default function PresentSimpleTenseScreen() {
     // Feedback
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Speech.speak("Correct!", { rate: 1.0, pitch: 1.2 });
+      playbackService.playSound("correct");
+      TTS.speak("Correct!", { rate: 1.0, pitch: 1.2 });
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Speech.speak("Try again.", { rate: 1.0, pitch: 0.9 });
+      playbackService.playSound("incorrect");
+      TTS.speak("Try again.", { rate: 1.0, pitch: 0.9 });
     }
   };
 

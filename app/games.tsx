@@ -1,13 +1,14 @@
 import GradientButton from "@/components/GradientButton";
 import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
+import { musicService } from "@/services/audio/music";
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef } from "react";
 import { FlatList, ImageBackground, Platform, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
-const games = [
+const games = [ 
   { 
     id: "1", 
     title: "Odd Word Out", 
@@ -29,30 +30,23 @@ const games = [
     icon: "mic-circle" as const,
     colors: ["#29B6F6", "#4FC3F7"] as const 
   },
+  { 
+    id: "4", 
+    title: "Cause and Effect", 
+    screen: "/(tabs)/causeeffect", 
+    icon: "link" as const,
+    colors: ["#26A69A", "#4DB6AC"] as const 
+  },
 ];
 
 export default function Games() {
   const router = useRouter();
   const clickSoundRef = useRef<Audio.Sound | null>(null);
-  const backgroundMusicRef = useRef<Audio.Sound | null>(null);
-
-  // ✅ STOP BACKGROUND MUSIC
-  const stopBackgroundMusic = async () => {
-    if (backgroundMusicRef.current) {
-      try {
-        await backgroundMusicRef.current.stopAsync();
-      } catch (e) { console.log("Stop error", e); }
-      try {
-        await backgroundMusicRef.current.unloadAsync();
-      } catch (e) { console.log("Unload error", e); }
-      backgroundMusicRef.current = null;
-    }
-  };
 
   // ✅ REUSABLE SOUND + NAVIGATION
   const playClickAndNavigate = async (route?: string, goBack?: boolean) => {
     try {
-      await stopBackgroundMusic();
+      await musicService.stopAsync();
 
       const { sound } = await Audio.Sound.createAsync(
         require("../assets/music/drop.mp3")
@@ -90,32 +84,10 @@ export default function Games() {
   // ✅ BACKGROUND MUSIC
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      const playMusic = async () => {
-        try {
-          await stopBackgroundMusic();
-          const { sound } = await Audio.Sound.createAsync(
-            require("../assets/music/fun.mp3"),
-            { isLooping: true }
-          );
-
-          if (isActive) {
-            backgroundMusicRef.current = sound;
-            await sound.playAsync();
-          } else {
-             await sound.unloadAsync();
-          }
-        } catch (error) {
-          console.log("Background music error:", error);
-        }
-      };
-
-      playMusic();
+      void musicService.playAsync();
 
       return () => {
-        isActive = false;
-        stopBackgroundMusic();
+        void musicService.stopAsync();
         Speech.stop();
       };
     }, [])
@@ -126,9 +98,6 @@ export default function Games() {
     return () => {
       if (clickSoundRef.current) {
          clickSoundRef.current.unloadAsync().catch(()=>{});
-      }
-      if (backgroundMusicRef.current) {
-         backgroundMusicRef.current.unloadAsync().catch(()=>{});
       }
     };
   }, []);

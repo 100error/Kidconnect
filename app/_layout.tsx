@@ -3,12 +3,22 @@ import { ThemeProvider, DefaultTheme, DarkTheme } from "@react-navigation/native
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import * as Speech from "expo-speech";
 import { useEffect } from "react";
+import { Audio } from "expo-av";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const pathname = usePathname();
 
   useEffect(() => {
+    // Configure global audio mode
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      staysActiveInBackground: false,
+      playThroughEarpieceAndroid: false,
+    });
+
     // Global audio cleanup on navigation
     Speech.stop();
   }, [pathname]);

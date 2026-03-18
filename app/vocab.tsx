@@ -1,5 +1,6 @@
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/ui/BackButton";
+import { musicService } from "@/services/audio/music";
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
@@ -82,29 +83,11 @@ const lessons = [
 const Vocab = () => {
   const router = useRouter();
   const clickSoundRef = useRef<Audio.Sound | null>(null);
-  const backgroundMusicRef = useRef<Audio.Sound | null>(null);
-
-  // ✅ STOP BACKGROUND MUSIC
-  const stopBackgroundMusic = async () => {
-    if (backgroundMusicRef.current) {
-      try {
-        await backgroundMusicRef.current.stopAsync();
-      } catch (error) {
-        console.log("Error stopping background music:", error);
-      }
-      try {
-        await backgroundMusicRef.current.unloadAsync();
-      } catch (error) {
-        console.log("Error unloading background music:", error);
-      }
-      backgroundMusicRef.current = null;
-    }
-  };
 
   // ✅ REUSABLE SOUND + NAVIGATION
   const playClickAndNavigate = async (route?: string, goBack?: boolean) => {
     try {
-      await stopBackgroundMusic();
+      await musicService.stopAsync();
 
       // Cleanup previous click sound if exists
       if (clickSoundRef.current) {
@@ -154,35 +137,10 @@ const Vocab = () => {
   // ✅ BACKGROUND MUSIC
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      const playMusic = async () => {
-        try {
-          // Ensure no previous music is playing
-          await stopBackgroundMusic();
-
-          const { sound } = await Audio.Sound.createAsync(
-            require("../assets/music/fun.mp3"),
-            { isLooping: true }
-          );
-
-          if (isActive) {
-            backgroundMusicRef.current = sound;
-            await sound.playAsync();
-          } else {
-            // If component became inactive during load, unload immediately
-            await sound.unloadAsync();
-          }
-        } catch (error) {
-          console.log("Background music error:", error);
-        }
-      };
-
-      playMusic();
+      void musicService.playAsync();
 
       return () => {
-        isActive = false;
-        stopBackgroundMusic();
+        void musicService.stopAsync();
         Speech.stop();
       };
     }, [])
@@ -193,14 +151,11 @@ const Vocab = () => {
       if (clickSoundRef.current) {
         clickSoundRef.current.unloadAsync().catch((err) => console.log("Unload click sound error:", err));
       }
-      if (backgroundMusicRef.current) {
-        backgroundMusicRef.current.unloadAsync().catch((err) => console.log("Unload bg music error:", err));
-      }
     };
   }, []);
 
   return (
-    <ImageBackground source={require("../assets/int.png")} style={styles.container} resizeMode="cover">
+    <ImageBackground source={require("@/assets/int.png")} style={styles.container} resizeMode="cover">
       <SafeAreaView style={styles.safeArea}>
         {/* HEADER */}
         <View style={styles.header}>

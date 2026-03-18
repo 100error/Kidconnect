@@ -2,12 +2,12 @@ import GradientButton from "@/components/GradientButton";
 import KicoMascot from "@/components/KicoMascot";
 import SettingsModal from "@/components/SettingsModal"; // Import Modal
 import TutorialOverlay from "@/components/TutorialOverlay";
+import { musicService } from "@/services/audio/music";
 import { profileService } from "@/services/profile"; // Import Profile Service
 import { DailyProgress, getCurrent24hProgress, getDailyHistory, subscribeProgress } from "@/services/progress";
 import { settingsService } from "@/services/settings"; // Import Settings Service
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { Audio } from "expo-av";
 import { documentDirectory, getInfoAsync, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
@@ -21,7 +21,6 @@ const TUTORIAL_FILE = `${documentDirectory}tutorial_seen.json`;
 
 const Home = () => {
   const navigation = useNavigation<any>();
-  const bgMusicRef = useRef<Audio.Sound | null>(null);
   const lessonRef = useRef<View | null>(null);
   const progressRef = useRef<View | null>(null);
   
@@ -36,6 +35,7 @@ const Home = () => {
   const [username, setUsername] = useState<string | null>(null);
   
   const [settingsVisible, setSettingsVisible] = useState(false); // Settings Modal State
+  const lastEncouragementProgress = useRef(0);
 
   const menuItems = [
     { 
@@ -61,59 +61,18 @@ const Home = () => {
     },
   ];
 
-  // HELPER: Stop & Unload Background Music
-  const stopBgMusic = async () => {
-    if (bgMusicRef.current) {
-      try {
-        await bgMusicRef.current.stopAsync();
-      } catch (e) { console.log("Stop bg music error", e); }
-      try {
-        await bgMusicRef.current.unloadAsync();
-      } catch (e) { console.log("Unload bg music error", e); }
-      bgMusicRef.current = null;
+  // Monitor Progress for Encouragement
+  useEffect(() => {
+    if (overallProgress - lastEncouragementProgress.current >= 10) {
+      // kicoRef.current?.showEncouragement(overallProgress);
+      lastEncouragementProgress.current = overallProgress;
     }
-  };
+  }, [overallProgress]);
 
   // PLAY BACKGROUND MUSIC with Settings Check
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      const loadAndPlayMusic = async () => {
-        try {
-          await stopBgMusic();
-          
-          const musicEnabled = await settingsService.isMusicEnabled();
-          if (!musicEnabled) return;
-
-          const { sound } = await Audio.Sound.createAsync(
-            require("../assets/music/fun.mp3"),
-            { shouldPlay: true, isLooping: true, volume: 0.3 }
-          );
-          
-          if (isActive) {
-            bgMusicRef.current = sound;
-          } else {
-            try { await sound.unloadAsync(); } catch(e) {}
-          }
-        } catch (e) {
-          console.log("Error loading music", e);
-        }
-      };
-
-      loadAndPlayMusic();
-      
-      // Subscribe to settings changes to toggle music dynamically
-      const settingsListener = (settings: any) => {
-        if (settings.musicEnabled) {
-          if (!bgMusicRef.current && isActive) {
-             loadAndPlayMusic();
-          }
-        } else {
-          stopBgMusic();
-        }
-      };
-      settingsService.addListener(settingsListener);
+      void musicService.playAsync();
 
       // Check progress on focus (handles 24h reset)
       getCurrent24hProgress().then(setOverallProgress).catch(() => {});
@@ -124,9 +83,7 @@ const Home = () => {
       }).catch(() => {});
 
       return () => {
-        isActive = false;
-        settingsService.removeListener(settingsListener);
-        stopBgMusic();
+        void musicService.stopAsync();
         Speech.stop(); // Stop any narration/TTS
       };
     }, [])
@@ -160,7 +117,7 @@ const Home = () => {
     const id = setTimeout(measureTargets, 500);
 
     return () => {
-      stopBgMusic();
+      void musicService.stopAsync();
       clearTimeout(id);
       unsub();
     };
@@ -212,7 +169,7 @@ const Home = () => {
     }
   };
 
-  const handleProgressPress = async () => {
+  const handleProgressPress = async () => { 
     try {
       const history = await getDailyHistory();
       setHistoryData(history);
@@ -235,7 +192,7 @@ const Home = () => {
 
   return (
     <ImageBackground
-      source={require("../assets/int.png")}
+      source={require("@/assets/int.png")}
       style={styles.bg}
     >
       <SafeAreaView style={styles.safeArea}>
@@ -251,7 +208,7 @@ const Home = () => {
               onPress={() => setSettingsVisible(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="menu" size={32} color="#fff" />
+              <Ionicons name="menu" size={32} color="#496e62ff" />
             </TouchableOpacity>
 
             {/* Progress Section - Top Right */}
@@ -280,10 +237,7 @@ const Home = () => {
           <KicoMascot />
 
           {/* Welcome Title */}
-          <Text style={styles.welcomeText}>
-            Hi {username ? `${username}` : ""}! Ready to learn?
-          </Text>
-
+         
           {/* Lesson Buttons */}
           <View 
             style={styles.lessonContainer}
@@ -307,10 +261,12 @@ const Home = () => {
           />
 
           <TutorialOverlay
-              isVisible={tutorialVisible}
-              onClose={handleTutorialClose}
-              lessonLayout={lessonLayout}
-              progressLayout={progressLayout}
+            isVisible={tutorialVisible}
+            onClose={() => {
+              void handleTutorialClose();
+            }}
+            lessonLayout={lessonLayout}
+            progressLayout={progressLayout}
           />
 
           {/* History Modal */}
@@ -385,13 +341,14 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(205, 222, 222, 0.2)',
+    color: 'rgba(16, 93, 93, 0.2)',
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
   progressWrapper: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
     borderRadius: 50,
     padding: 5,
   },

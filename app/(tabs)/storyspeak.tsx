@@ -3,21 +3,21 @@ import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from '@/hooks/useInstruction';
 import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
 import { ensureMicPermission } from "@/services/mic";
 import { addResult } from "@/services/progress";
 import { addAttempt } from "@/services/speechlog";
 import { speechService } from "@/services/speechService";
-import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Image, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 type Story = {
-  text: string;
+  text: string; 
   target: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  image: any;
 };
 
 function StorySpeak() {
@@ -25,19 +25,29 @@ function StorySpeak() {
 
   const stories: Story[] = useMemo(
     () => [
-      { text: "The cat sat on the mat.", target: "cat", icon: "cat" },
-      { text: "I see a big dog.", target: "dog", icon: "dog" },
-      { text: "She likes to play.", target: "play", icon: "gamepad-variant" },
-      { text: "The sun is hot.", target: "sun", icon: "white-balance-sunny" },
-      { text: "We go to the park.", target: "park", icon: "pine-tree" },
-      { text: "The bird can fly.", target: "bird", icon: "bird" },
-      { text: "I like red apples.", target: "apples", icon: "food-apple" },
-      { text: "My fish can swim.", target: "fish", icon: "fish" },
-      { text: "The car is fast.", target: "car", icon: "car" },
-      { text: "I have a blue ball.", target: "ball", icon: "soccer" },
+      { text: "The cat sat on the mat.", target: "cat", image: require("@/assets/storyspeak/cat.png") },
+      { text: "I see a big dog.", target: "dog", image: require("@/assets/storyspeak/bigdog.png") },
+      { text: "She likes to play.", target: "play", image: require("@/assets/storyspeak/girlplaying.png") },
+      { text: "The sun is hot.", target: "sun", image: require("@/assets/storyspeak/hotsun.png") },
+      { text: "We go to the park.", target: "park", image: require("@/assets/storyspeak/playpark.png") },
+      { text: "The bird can fly.", target: "bird", image: require("@/assets/storyspeak/bird.png") },
+      { text: "I like red apples.", target: "apples", image: require("@/assets/storyspeak/redapple.png") },
+      { text: "My fish can swim.", target: "fish", image: require("@/assets/storyspeak/fish.png") },
+      { text: "The car is fast.", target: "car", image: require("@/assets/storyspeak/racing.png") },
+      { text: "I have a blue ball.", target: "ball", image: require("@/assets/storyspeak/blueball.png") },
+      { text: "The boy runs fast.", target: "boy", image: require("@/assets/storyspeak/run.png") },
+      { text: "The girl reads a book.", target: "book", image: require("@/assets/storyspeak/book.png") },
+      { text: "The cow gives milk.", target: "cow", image: require("@/assets/storyspeak/cow.png") },
+      { text: "The frog can jump.", target: "frog", image: require("@/assets/storyspeak/frog.png") },
+      { text: "The baby drinks milk.", target: "baby", image: require("@/assets/storyspeak/baby.png") },
+      { text: "The duck swims in water.", target: "duck", image: require("@/assets/storyspeak/duck.png") },
+      { text: "The monkey climbs a tree.", target: "monkey", image: require("@/assets/storyspeak/monkey.png") },
+      { text: "The train goes fast.", target: "train", image: require("@/assets/storyspeak/train.png") },
+      { text: "The kite flies high.", target: "kite", image: require("@/assets/storyspeak/kite.png") },
+      { text: "The flower smells nice.", target: "flower", image: require("@/assets/storyspeak/flower.png") },
     ],
     []
-  );
+  );  
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mistakes, setMistakes] = useState<Set<number>>(new Set());
@@ -78,7 +88,7 @@ function StorySpeak() {
       if (speechService.checkWord(result, currentStory.target)) {
         setWordStatus('correct');
         playSound('correct');
-        speakPraise(`Great reading! You read ${currentStory.target} correctly.`);
+        TTS.speak('Correct!', { rate: 0.9, pitch: 1.1 });
         addAttempt({ activityId: "storyspeak", text: spoken, success: true });
         
         // Delay alert slightly to show visual feedback
@@ -116,7 +126,7 @@ function StorySpeak() {
         setMistakes(prev => new Set(prev).add(currentIndex));
         setWordStatus('incorrect');
         playSound('wrong');
-        speakCorrection(`Try again. Read the word ${currentStory.target}.`);
+        TTS.speak('Try again.', { rate: 0.9, pitch: 1.1 });
         addAttempt({ activityId: "storyspeak", text: spoken, success: false });
         
         Alert.alert('❌ Try Again', `You said “${spoken}”. Try reading “${currentStory.target}” again!`, [
@@ -263,15 +273,15 @@ function StorySpeak() {
                 {recognizedText !== '' && (
                   <View style={styles.feedbackContainer}>
                     <Text style={styles.feedbackLabel}>You said:</Text>
-                    <Text style={styles.feedbackText}>"{recognizedText}"</Text>
+                    <Text style={styles.feedbackText}>&quot;{recognizedText}&quot;</Text>
                   </View>
                 )}
               </View>
 
-              {/* Right: Icon/Image */}
+              {/* Right: Image */}
               <View style={[styles.rightColumn, isCompact && { borderLeftWidth: 0, borderBottomWidth: 1, borderBottomColor: '#EEEEEE', paddingBottom: 20 }]}>
                 <View style={[styles.imagePlaceholder, { width: imageSize, height: imageSize }]}>
-                   <MaterialCommunityIcons name={currentStory.icon} size={imageSize * 0.6} color="#FF7043" />
+                   <Image source={currentStory.image} style={{ width: imageSize * 0.8, height: imageSize * 0.8 }} resizeMode="contain" />
                 </View>
               </View>
             </View>

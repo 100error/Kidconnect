@@ -7,7 +7,6 @@
     "icon": "./assets/images/d.png",
     "scheme": "kid",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -18,13 +17,12 @@
         "backgroundImage": "./assets/images/d.png",
         "monochromeImage": "./assets/images/d.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.rerelin04.Kid"
+      "package": "com.himayafloremay05.Kid"
     },
     "web": {
       "output": "static",
@@ -44,7 +42,18 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -53,9 +62,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b6ba09fd-c650-4478-a578-0a285d3a95a2"
+        "projectId": "864745ac-1b1f-4223-bf93-6734877b276f"
       }
     },
-    "owner": "relin04"
+    "owner": "floremayhimaya14"
   }
 }

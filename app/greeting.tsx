@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ImageBackground } from "react-native";
 import { Video, ResizeMode, Audio } from "expo-av";
 import { router } from "expo-router";
-
+ 
 const { width, height } = Dimensions.get("window");
 
 export default function Greeting() {
@@ -54,14 +54,14 @@ export default function Greeting() {
 
   return (
     <ImageBackground
-      source={require("../assets/in.png")}
+      source={require("@/assets/in.png")}
       style={styles.container}
       resizeMode="cover"
     >
       {/* Full screen video */}
       <Video
         ref={videoRef}
-        source={require("../assets/videos/meet1.mp4")}
+        source={require("../assets/videos/kik.mp4")}
         style={StyleSheet.absoluteFillObject}
         resizeMode={ResizeMode.COVER}
         shouldPlay 

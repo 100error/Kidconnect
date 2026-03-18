@@ -1,15 +1,16 @@
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/ui/BackButton";
+import { musicService } from "@/services/audio/music";
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useRef } from "react";
+import React, { useCallback } from "react";
 import { FlatList, ImageBackground, Platform, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 const lessons = [
   { 
     id: "1", 
-    title: "Word Practice", 
+    title: "Match Pairs", 
     screen: "/(tabs)/practice/pronunciation", 
     icon: "mic" as const,
     colors: ["#66BB6A", "#81C784"] as const 
@@ -18,7 +19,7 @@ const lessons = [
     id: "2", 
     title: "Sentence Builder", 
     screen: "/(tabs)/sentencebuild", 
-    icon: "construct" as const,
+    icon: "construct" as const, 
     colors: ["#29B6F6", "#4FC3F7"] as const 
   },
   { 
@@ -35,29 +36,22 @@ const lessons = [
     icon: "time" as const,
     colors: ["#FFB74D", "#FF9800"] as const 
   },
+  { 
+    id: "5", 
+    title: "Riddles", 
+    screen: "/(tabs)/riddles", 
+    icon: "help-circle" as const,
+    colors: ["#FF8A65", "#F06292"] as const 
+  },
 ];
 
 export default function Pract() {
   const router = useRouter();
-  const backgroundMusicRef = useRef<Audio.Sound | null>(null);
-
-  // ✅ STOP & CLEANUP MUSIC
-  const stopBackgroundMusic = async () => {
-    if (backgroundMusicRef.current) {
-      try {
-        await backgroundMusicRef.current.stopAsync();
-      } catch (e) { console.log("Stop error", e); }
-      try {
-        await backgroundMusicRef.current.unloadAsync();
-      } catch (e) { console.log("Unload error", e); }
-      backgroundMusicRef.current = null;
-    }
-  };
 
   // ✅ PLAY CLICK SOUND THEN NAVIGATE
   const playAndNavigate = async (screen: string) => {
     try {
-      await stopBackgroundMusic();
+      await musicService.stopAsync();
 
       const { sound } = await Audio.Sound.createAsync(
         require("../assets/music/drop.mp3")
@@ -80,39 +74,17 @@ export default function Pract() {
   // ✅ AUTO PLAY BACKGROUND MUSIC + CLEANUP
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      const playMusic = async () => {
-        try {
-          await stopBackgroundMusic();
-          const { sound } = await Audio.Sound.createAsync(
-            require("../assets/music/fun.mp3"),
-            { isLooping: true }
-          );
-
-          if (isActive) {
-            backgroundMusicRef.current = sound;
-            await sound.playAsync();
-          } else {
-             await sound.unloadAsync();
-          }
-        } catch (error) {
-           console.log("Background music error:", error);
-        }
-      };
-
-      playMusic();
+      void musicService.playAsync();
 
       return () => {
-        isActive = false;
-        stopBackgroundMusic();
+        void musicService.stopAsync();
         Speech.stop();
       };
     }, [])
   );
 
   return (
-    <ImageBackground source={require("../assets/int.png")} style={styles.container} resizeMode="cover">
+    <ImageBackground source={require("@/assets/int.png")} style={styles.container} resizeMode="cover">
       <SafeAreaView style={styles.safeArea}>
         {/* HEADER */}
         <View style={styles.header}>

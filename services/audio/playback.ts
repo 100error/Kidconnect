@@ -1,30 +1,39 @@
 import { Audio } from 'expo-av';
 
-// Map of sound names to require paths
 const SOUNDS = {
-  correct: require('../../assets/music/feedback/correct.mp3'),
-  incorrect: require('../../assets/music/feedback/wrong.mp3'),
-  // Add other sounds here
+  correct: require('../../assets/music/buttons/button.mp3'),
+  incorrect: require('../../assets/music/buttons/error.mp3'),
 };
 
 export const playbackService = {
+  _current: null as Audio.Sound | null,
+
+  stop: async () => {
+    if (!playbackService._current) return;
+    try {
+      await playbackService._current.stopAsync();
+    } catch {}
+    try {
+      await playbackService._current.unloadAsync();
+    } catch {}
+    playbackService._current = null;
+  },
+
   playSound: async (soundName: keyof typeof SOUNDS) => {
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        SOUNDS[soundName],
-        { shouldPlay: true }
-      );
-      
-      // We don't need to hold the reference if we just want it to play and die,
-      // but unloading is good practice. 
-      // For simple SFX, let's auto-unload on finish.
+      await playbackService.stop();
+      const { sound } = await Audio.Sound.createAsync(SOUNDS[soundName], { shouldPlay: true });
+      playbackService._current = sound;
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.isLoaded && status.didJustFinish) {
+          if (playbackService._current === sound) {
+            playbackService._current = null;
+          }
           await sound.unloadAsync();
         }
       });
     } catch (error) {
       console.log('Error playing sound:', error);
     }
-  }
+  },
 };

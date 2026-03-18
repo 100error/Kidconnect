@@ -16,7 +16,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensio
 const words: string[] = ["apple", "banana", "grape", "orange", "peach"];
 
 export default function WordPronounce() {
-  const { width } = useWindowDimensions();
+  const { width } = useWindowDimensions(); 
   const isTablet = width > 600;
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);

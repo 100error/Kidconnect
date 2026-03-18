@@ -63,7 +63,7 @@ export default function Index() {
 
   return (
     <ImageBackground
-      source={require("../assets/ba.png")}
+      source={require("@/assets/ba.png")}
       style={styles.container}
       resizeMode="cover"
     >

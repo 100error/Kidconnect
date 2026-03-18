@@ -1,20 +1,81 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from '@/hooks/useInstruction';
+import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
-import { FlatList, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
-import { vowelSections } from "../common";
+import { FlatList, Image, Modal, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 
-interface CardItem {
+// Define all available icons
+const ICON_ASSETS = [
+  { word: "Battery", source: require("@/assets/icons/battery.png") },
+  { word: "Bird", source: require("@/assets/icons/bird.png") },
+  { word: "Box", source: require("@/assets/icons/box.png") },
+  { word: "Boy", source: require("@/assets/icons/boy.png") }, 
+  { word: "Brain", source: require("@/assets/icons/brain.png") },
+  { word: "Bunny", source: require("@/assets/icons/bunny.png") },
+  { word: "Hamburger", source: require("@/assets/icons/hamburger.png") },
+  { word: "Car", source: require("@/assets/icons/car.png") },
+  { word: "Carrot", source: require("@/assets/icons/carrot.png") },
+  { word: "Cat", source: require("@/assets/icons/cat.png") },
+  { word: "Cherry", source: require("@/assets/icons/cherry.png") },
+  { word: "Chick", source: require("@/assets/icons/chick.png") },
+  { word: "Clock", source: require("@/assets/icons/clock.png") },
+  { word: "Clouds", source: require("@/assets/icons/clouds.png") },
+  { word: "Comic", source: require("@/assets/icons/comic.png") },
+  { word: "Cow", source: require("@/assets/icons/cow.png") },
+  { word: "Mouse", source: require("@/assets/icons/mouse.png") },
+  { word: "Reindeer", source: require("@/assets/icons/reindeer.png") },
+  { word: "Eagle", source: require("@/assets/icons/eagle.png") },
+  { word: "Feet", source: require("@/assets/icons/feet.png") },
+  { word: "Fish", source: require("@/assets/icons/fish.png") },
+  { word: "Flashlight", source: require("@/assets/icons/flashlight.png") },
+  { word: "Can", source: require("@/assets/icons/can.png") },
+  { word: "Girl", source: require("@/assets/icons/girl.png") },
+  { word: "Glasses", source: require("@/assets/icons/glasses.png") },
+  { word: "Hand", source: require("@/assets/icons/hand.png") },
+  { word: "Hat", source: require("@/assets/icons/hat.png") },
+  { word: "House", source: require("@/assets/icons/house.png") },
+  { word: "Kid", source: require("@/assets/icons/kid.png") },
+  { word: "Magnifier", source: require("@/assets/icons/magnifier.png") },
+  { word: "Man", source: require("@/assets/icons/man.png") },
+  { word: "Mango", source: require("@/assets/icons/mango.png") },
+  { word: "Microphone", source: require("@/assets/icons/microphone.png") },
+  { word: "Milk", source: require("@/assets/icons/milk.png") },
+  { word: "Monkey", source: require("@/assets/icons/monkey.png") },
+  { word: "Notebook", source: require("@/assets/icons/notebook.png") },
+  { word: "Orange", source: require("@/assets/icons/orange.png") },
+  { word: "Pig", source: require("@/assets/icons/pig.png") },
+  { word: "Pillow", source: require("@/assets/icons/pillow.png") },
+  { word: "Plane", source: require("@/assets/icons/plane.png") },
+  { word: "Ring", source: require("@/assets/icons/ring.png") },
+  { word: "Rocket Ship", source: require("@/assets/icons/rocketship.png") },
+  { word: "Sad", source: require("@/assets/icons/sad.png") },
+  { word: "Sheep", source: require("@/assets/icons/sheep.png") },
+  { word: "Snake", source: require("@/assets/icons/snake.png") },
+  { word: "Star", source: require("@/assets/icons/star.png") },
+  { word: "Sun", source: require("@/assets/icons/sun.png") },
+  { word: "Telephone", source: require("@/assets/icons/telephone.png") },
+  { word: "Tree", source: require("@/assets/icons/tree.png") },
+  { word: "TV", source: require("@/assets/icons/tv.png") },
+  { word: "Two", source: require("@/assets/icons/two.png") },
+  { word: "UFO", source: require("@/assets/icons/ufo.png") },
+  { word: "Watermelon", source: require("@/assets/icons/watermelon.png") },
+  { word: "We", source: require("@/assets/icons/we.png") },
+  { word: "Whale", source: require("@/assets/icons/whale.png") },
+  { word: "Yarn", source: require("@/assets/icons/yarn.png") },
+];
+
+ interface CardItem {
   id: string;
   matchKey: string;
   word: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  imageSource?: any;
   type: 'image' | 'word';
   color: string;
   state: 'idle' | 'selected' | 'matched' | 'mismatch';
@@ -67,9 +128,8 @@ export default function PracticePronunciation() {
 
   // Initialize Game
   useEffect(() => {
-    // 1. Get all valid items
-    const allExamples = vowelSections.flatMap(section => section.examples);
-    const validItems = allExamples.filter(item => item.icon);
+    // 1. Get all valid items (Using ICON_ASSETS now)
+    const validItems = ICON_ASSETS;
     
     // 2. Select 10 random items
     const shuffledItems = [...validItems].sort(() => 0.5 - Math.random()).slice(0, 10);
@@ -84,7 +144,7 @@ export default function PracticePronunciation() {
         id: `img-${index}`,
         matchKey: item.word,
         word: item.word,
-        icon: item.icon as any,
+        imageSource: item.source,
         type: 'image',
         color: color,
         state: 'idle'
@@ -95,7 +155,6 @@ export default function PracticePronunciation() {
         id: `txt-${index}`,
         matchKey: item.word,
         word: item.word,
-        icon: item.icon as any,
         type: 'word',
         color: color,
         state: 'idle'
@@ -114,8 +173,8 @@ export default function PracticePronunciation() {
     if (isProcessing || card.state === 'matched' || card.state === 'selected') return;
 
     // Play TTS on tap (optional but helpful)
-    Speech.stop();
-    Speech.speak(card.word, { rate: 0.85 });
+    TTS.stop();
+    TTS.speak(card.word, { rate: 0.85 });
 
     if (!selectedId) {
       // First card selected
@@ -136,7 +195,8 @@ export default function PracticePronunciation() {
           setCards(prev => prev.map(c => 
             c.matchKey === card.matchKey ? { ...c, state: 'matched' } : c
           ));
-          Speech.speak("Good job!", { rate: 0.9 });
+          playbackService.playSound("correct");
+          TTS.speak("Correct!", { rate: 0.9 });
           setSelectedId(null);
           setIsProcessing(false);
           checkCompletion();
@@ -147,8 +207,8 @@ export default function PracticePronunciation() {
           setCards(prev => prev.map(c => 
             c.id === firstCard.id || c.id === card.id ? { ...c, state: 'mismatch' } : c
           ));
-          Speech.stop();
-          Speech.speak("Try again", { rate: 0.85 });
+          playbackService.playSound("incorrect");
+          TTS.speak("Try again", { rate: 0.85 });
           setMistakes(prev => new Set(prev).add(firstCard.matchKey).add(card.matchKey));
         }, 500);
 
@@ -251,8 +311,12 @@ export default function PracticePronunciation() {
               onPress={() => handleCardPress(item)}
               activeOpacity={0.8}
             >
-              {item.type === 'image' ? (
-                <Ionicons name={item.icon} size={32} color="#00695C" />
+              {item.type === 'image' && item.imageSource ? (
+                <Image 
+                  source={item.imageSource} 
+                  style={styles.cardImage} 
+                  resizeMode="contain" 
+                />
               ) : (
                 <Text style={styles.wordText} numberOfLines={1} adjustsFontSizeToFit>
                   {item.word}
@@ -317,170 +381,133 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 24,
-    fontWeight: "bold",
-    color: "#00695C",
-    textAlign: "center",
+    fontWeight: 'bold',
+    color: '#00695C',
     flex: 1,
+    textAlign: 'center',
   },
   scoreBadge: {
-    backgroundColor: "#B2DFDB",
+    backgroundColor: 'rgba(255,255,255,0.5)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
   scoreText: {
-    fontWeight: "bold",
-    color: "#00695C",
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#004D40',
   },
   subtitle: {
-    textAlign: "center",
-    fontSize: 18,
-    color: "#004D40",
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#004D40',
     marginBottom: 10,
-    fontWeight: "600",
-  },
-  backgroundImage: {
-    flex: 1,
-    resizeMode: "cover",
-  },
-  gradientOverlay: {
-    flex: 1,
-    paddingTop: Platform.OS === "android" ? 40 : 0,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  progressContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  progressText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#F57C00",
-  },
-  gridContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
+    opacity: 0.8,
   },
   listContainer: {
+    paddingHorizontal: 20,
     paddingBottom: 40,
-    gap: 10,
   },
   columnWrapper: {
-    justifyContent: "flex-start",
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   card: {
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#FFF3E0",
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
-    padding: 5,
+    padding: 8, // Added padding for images
+  },
+  cardImage: {
+    width: '85%',
+    height: '85%',
   },
   wordText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#004D40",
-    textAlign: "center",
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
   },
   statusOverlay: {
-    position: "absolute",
+    position: 'absolute',
     top: 5,
     right: 5,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 12,
   },
-  
-  // Modal Styles (Reused)
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
-    width: "85%",
-    maxWidth: 500,
-    backgroundColor: "white",
-    borderRadius: 25,
-    padding: 25,
-    alignItems: "center",
-    elevation: 10,
+    width: '85%',
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    padding: 30,
+    alignItems: 'center',
+    elevation: 5,
   },
   modalTitle: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#00695C",
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
     marginBottom: 20,
-    textAlign: "center",
+    textAlign: 'center',
   },
   resultScoreContainer: {
-    alignItems: "center",
-    marginBottom: 25,
-    backgroundColor: "#E0F2F1",
-    padding: 20,
-    borderRadius: 20,
-    width: "100%",
+    alignItems: 'center',
+    marginBottom: 30,
   },
   resultScoreLabel: {
-    fontSize: 18,
-    color: "#00695C",
+    fontSize: 16,
+    color: '#666',
     marginBottom: 5,
-    fontWeight: "600",
   },
   resultScoreValue: {
     fontSize: 48,
-    fontWeight: "900",
+    fontWeight: 'bold',
   },
   modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
+    flexDirection: 'row',
     gap: 15,
   },
   tryAgainButton: {
-    flex: 1,
-    backgroundColor: "#26C6DA",
-    paddingVertical: 15,
-    borderRadius: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   exitButton: {
-    flex: 1,
-    backgroundColor: "#FF7043",
-    paddingVertical: 15,
-    borderRadius: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
+    backgroundColor: '#FF5722',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   buttonText: {
-    color: "white",
+    color: '#FFF',
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: 'bold',
   },
 });

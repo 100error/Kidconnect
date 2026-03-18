@@ -213,7 +213,7 @@ export default function Spelled() {
 
                       <View style={[styles.exampleBox, { marginTop: 8 }]}>
                         <Text style={styles.exampleLabel}>Sentence:</Text>
-                        <Text style={[styles.exampleText, { fontStyle: 'italic' }]}>"{item.exampleSentence}"</Text>
+                        <Text style={[styles.exampleText, { fontStyle: 'italic' }]}>&quot;{item.exampleSentence}&quot;</Text>
                       </View>
                     </LinearGradient>
                   </TouchableOpacity>

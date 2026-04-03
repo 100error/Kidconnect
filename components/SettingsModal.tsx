@@ -1,18 +1,29 @@
-import { settingsService } from '@/services/settings';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { settingsService } from "@/services/settings";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+    Modal,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
+} from "react-native";
 
 interface SettingsModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
-export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
+export default function SettingsModal({
+  visible,
+  onClose,
+}: SettingsModalProps) {
   const router = useRouter();
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(true);
+  const [soundsEnabled, setSoundEffectsEnabled] = useState(true);
 
   useEffect(() => {
     if (visible) {
@@ -21,15 +32,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   }, [visible]);
 
   const loadSettings = async () => {
-    const s = await settingsService.isSoundEnabled();
     const m = await settingsService.isMusicEnabled();
-    setSoundEnabled(s);
+    const s = await settingsService.isSoundEffectsEnabled();
     setMusicEnabled(m);
-  };
-
-  const toggleSound = async (value: boolean) => {
-    setSoundEnabled(value);
-    await settingsService.setSoundEnabled(value);
+    setSoundEffectsEnabled(s);
   };
 
   const toggleMusic = async (value: boolean) => {
@@ -37,9 +43,14 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
     await settingsService.setMusicEnabled(value);
   };
 
+  const toggleSounds = async (value: boolean) => {
+    setSoundEffectsEnabled(value);
+    await settingsService.setSoundEffectsEnabled(value);
+  };
+
   const handleProfilePress = () => {
     onClose();
-    router.push('/profile' as any);
+    router.push("/profile" as any);
   };
 
   return (
@@ -64,7 +75,11 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
               {/* Profile Option */}
               <TouchableOpacity style={styles.row} onPress={handleProfilePress}>
                 <View style={styles.rowLeft}>
-                  <Ionicons name="person-circle-outline" size={32} color="#4CAF50" />
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={32}
+                    color="#4CAF50"
+                  />
                   <Text style={styles.rowText}>Profile</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={24} color="#999" />
@@ -72,33 +87,15 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
 
               <View style={styles.divider} />
 
-              {/* Sound Option */}
+              {/* Music Toggle */}
               <View style={styles.row}>
                 <View style={styles.rowLeft}>
-                  <Ionicons 
-                    name={soundEnabled ? "volume-high" : "volume-mute"} 
-                    size={32} 
-                    color="#FF9800" 
-                  />
-                  <Text style={styles.rowText}>Sound</Text>
-                </View>
-                <Switch
-                  value={soundEnabled}
-                  onValueChange={toggleSound}
-                  trackColor={{ false: "#e0e0e0", true: "#FFCC80" }}
-                  thumbColor={soundEnabled ? "#FF9800" : "#f4f3f4"}
-                />
-              </View>
-
-              <View style={styles.divider} />
-
-              {/* Music Option */}
-              <View style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons 
-                    name={musicEnabled ? "musical-notes" : "musical-note-outline"} 
-                    size={32} 
-                    color="#2196F3" 
+                  <Ionicons
+                    name={
+                      musicEnabled ? "musical-notes" : "musical-notes-outline"
+                    }
+                    size={32}
+                    color="#2196F3"
                   />
                   <Text style={styles.rowText}>Music</Text>
                 </View>
@@ -110,6 +107,25 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 />
               </View>
 
+              <View style={styles.divider} />
+
+              {/* Sound Effects Toggle */}
+              <View style={styles.row}>
+                <View style={styles.rowLeft}>
+                  <Ionicons
+                    name={soundsEnabled ? "volume-high" : "volume-mute"}
+                    size={32}
+                    color="#FF9800"
+                  />
+                  <Text style={styles.rowText}>Sound Effects</Text>
+                </View>
+                <Switch
+                  value={soundsEnabled}
+                  onValueChange={toggleSounds}
+                  trackColor={{ false: "#e0e0e0", true: "#FFCC80" }}
+                  thumbColor={soundsEnabled ? "#FF9800" : "#f4f3f4"}
+                />
+              </View>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -121,54 +137,54 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   popup: {
-    width: '85%',
-    backgroundColor: 'white',
+    width: "85%",
+    backgroundColor: "white",
     borderRadius: 20,
     padding: 20,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
   closeButton: {
     padding: 5,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 15,
   },
   rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 15,
   },
   rowText: {
     fontSize: 18,
-    color: '#333',
-    fontWeight: '500',
+    color: "#333",
+    fontWeight: "500",
   },
   divider: {
     height: 1,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
     marginVertical: 5,
   },
 });

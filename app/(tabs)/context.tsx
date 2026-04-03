@@ -1,28 +1,38 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import { useInstruction } from '@/hooks/useInstruction';
+import { useInstruction } from "@/hooks/useInstruction";
+import { audioService } from "@/services/audio/audioService";
+import { musicService } from "@/services/audio/music";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useMemo } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
-  type ContextSection = {
-    title: string;
-    color: string;
-    darkColor: string;
-    items: ContextItem[];
-  };
+type ContextSection = {
+  title: string;
+  color: string;
+  darkColor: string;
+  items: ContextItem[];
+};
 
-  type ContextItem = {
-    id: string;
-    word: string; // The focus word or title
-    icon: string;
-    description: string; // Meaning 1 or Strategy desc
-    description2?: string; // Meaning 2 (optional)
-    example: string; // Example 1
-    example2?: string; // Example 2 (optional)
-  };
+type ContextItem = {
+  id: string;
+  word: string; // The focus word or title
+  icon: string;
+  description: string; // Meaning 1 or Strategy desc
+  description2?: string; // Meaning 2 (optional)
+  example: string; // Example 1
+  example2?: string; // Example 2 (optional)
+};
 
 export default function Context() {
   const { width } = useWindowDimensions();
@@ -30,12 +40,12 @@ export default function Context() {
   const numColumns = isTablet ? 2 : 1;
   const gap = 12;
   const padding = 16;
-  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   // Instructions
   const { play: playInstruction } = useInstruction(
-    'context',
-    "Learn how to find meaning! Tap the cards to hear clues and examples."
+    "context",
+    "Learn how to find meaning! Tap the cards to hear clues and examples.",
   );
 
   const sections: ContextSection[] = useMemo(
@@ -50,37 +60,37 @@ export default function Context() {
             word: "Definition Clues",
             icon: "📘",
             description: "The sentence tells you the meaning directly.",
-            example: '"A mammal is an animal that has fur and gives milk."'
+            example: '"A mammal is an animal that has fur and gives milk."',
           },
           {
             id: "s2",
             word: "Synonym Clues",
             icon: "🟰",
             description: "A word nearby has the same meaning.",
-            example: '"She was joyful, or very happy, to see her puppy."'
+            example: '"She was joyful, or very happy, to see her puppy."',
           },
           {
             id: "s3",
             word: "Antonym Clues",
             icon: "↔️",
             description: "A word nearby has the opposite meaning.",
-            example: '"Unlike his rude brother, Sam is always polite."'
+            example: '"Unlike his rude brother, Sam is always polite."',
           },
           {
             id: "s4",
             word: "Example Clues",
             icon: "📋",
             description: "Examples help explain the difficult word.",
-            example: '"Citrus fruits, such as lemons and oranges, are sour."'
+            example: '"Citrus fruits, such as lemons and oranges, are sour."',
           },
           {
             id: "s5",
             word: "Inference Clues",
             icon: "🕵️",
             description: "Use the whole sentence to guess.",
-            example: '"She shivered and put on a coat because it was frigid."'
-          }
-        ]
+            example: '"She shivered and put on a coat because it was frigid."',
+          },
+        ],
       },
       {
         title: "Words with Two Meanings",
@@ -94,7 +104,7 @@ export default function Context() {
             description: "1. The sound a dog makes.",
             example: '"The dog gave a loud bark."',
             description2: "2. The skin of a tree.",
-            example2: '"The tree has rough brown bark."'
+            example2: '"The tree has rough brown bark."',
           },
           {
             id: "mm2",
@@ -103,7 +113,7 @@ export default function Context() {
             description: "1. A flying animal.",
             example: '"The bat flew out of the cave."',
             description2: "2. A stick to hit a ball.",
-            example2: '"He hit the baseball with a wooden bat."'
+            example2: '"He hit the baseball with a wooden bat."',
           },
           {
             id: "mm3",
@@ -112,7 +122,7 @@ export default function Context() {
             description: "1. A place for money.",
             example: '"I save my coins in the bank."',
             description2: "2. The land beside a river.",
-            example2: '"We fished from the river bank."'
+            example2: '"We fished from the river bank."',
           },
           {
             id: "mm4",
@@ -121,7 +131,7 @@ export default function Context() {
             description: "1. Jewelry for a finger.",
             example: '"She wore a shiny gold ring."',
             description2: "2. The sound of a bell.",
-            example2: '"Did you hear the school bell ring?"'
+            example2: '"Did you hear the school bell ring?"',
           },
           {
             id: "mm5",
@@ -130,7 +140,7 @@ export default function Context() {
             description: "1. Moving your hand hello.",
             example: '"Please wave to your friends."',
             description2: "2. Moving water in the sea.",
-            example2: '"A big wave splashed the boat."'
+            example2: '"A big wave splashed the boat."',
           },
           {
             id: "mm6",
@@ -139,7 +149,7 @@ export default function Context() {
             description: "1. A place to play.",
             example: '"We played on the swings at the park."',
             description2: "2. Stopping a car.",
-            example2: '"Dad will park the car in the garage."'
+            example2: '"Dad will park the car in the garage."',
           },
           {
             id: "mm7",
@@ -148,7 +158,7 @@ export default function Context() {
             description: "1. A small insect.",
             example: '"A fly buzzed around my food."',
             description2: "2. To move through the air.",
-            example2: '"Birds fly high in the sky."'
+            example2: '"Birds fly high in the sky."',
           },
           {
             id: "mm8",
@@ -157,19 +167,28 @@ export default function Context() {
             description: "1. A clock on your wrist.",
             example: '"I looked at my watch for the time."',
             description2: "2. To look at something.",
-            example2: '"We will watch a movie tonight."'
-          }
-        ]
-      }
+            example2: '"We will watch a movie tonight."',
+          },
+        ],
+      },
     ],
-    []
+    [],
   );
 
   const speak = (text: string) => {
-    Speech.stop();
-    Speech.speak(text, { rate: 0.75, pitch: 1.1 });
+    audioService.speak(text);
     Haptics.selectionAsync();
   };
+
+  // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
+  useFocusEffect(
+    useCallback(() => {
+      void musicService.stopAsync();
+      return () => {
+        Speech.stop();
+      };
+    }, []),
+  );
 
   return (
     <LinearGradient colors={["#E8EAF6", "#E3F2FD"]} style={styles.container}>
@@ -179,18 +198,37 @@ export default function Context() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.intro}>
-          Context clues help you understand words! Learn strategies and words with multiple meanings.
+          Context clues help you understand words! Learn strategies and words
+          with multiple meanings.
         </Text>
 
         {sections.map((section) => (
           <View key={section.title} style={styles.sectionContainer}>
-            <View style={[styles.sectionHeader, { backgroundColor: section.color, borderLeftColor: section.darkColor }]}>
-              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
+            <View
+              style={[
+                styles.sectionHeader,
+                {
+                  backgroundColor: section.color,
+                  borderLeftColor: section.darkColor,
+                },
+              ]}
+            >
+              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>
+                {section.title}
+              </Text>
             </View>
 
-            <View style={[styles.cards, { flexDirection: "row", flexWrap: "wrap", gap }]}>
+            <View
+              style={[
+                styles.cards,
+                { flexDirection: "row", flexWrap: "wrap", gap },
+              ]}
+            >
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
@@ -203,23 +241,42 @@ export default function Context() {
                     speak(textToSpeak);
                   }}
                 >
-                  <LinearGradient colors={["#FFFFFF", "#FAFAFA"]} style={styles.cardInner}>
+                  <LinearGradient
+                    colors={["#FFFFFF", "#FAFAFA"]}
+                    style={styles.cardInner}
+                  >
                     <View style={styles.cardHeader}>
                       <Text style={styles.cardIcon}>{item.icon}</Text>
                       <Text style={styles.cardTitle}>{item.word}</Text>
                     </View>
-                    
+
                     <View style={styles.meaningBlock}>
                       <Text style={styles.cardDesc}>{item.description}</Text>
-                      <Text style={[styles.cardExample, { color: section.darkColor }]}>{item.example}</Text>
+                      <Text
+                        style={[
+                          styles.cardExample,
+                          { color: section.darkColor },
+                        ]}
+                      >
+                        {item.example}
+                      </Text>
                     </View>
 
                     {item.description2 && item.example2 && (
                       <>
                         <View style={styles.divider} />
                         <View style={styles.meaningBlock}>
-                          <Text style={styles.cardDesc}>{item.description2}</Text>
-                          <Text style={[styles.cardExample, { color: section.darkColor }]}>{item.example2}</Text>
+                          <Text style={styles.cardDesc}>
+                            {item.description2}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.cardExample,
+                              { color: section.darkColor },
+                            ]}
+                          >
+                            {item.example2}
+                          </Text>
                         </View>
                       </>
                     )}
@@ -229,7 +286,7 @@ export default function Context() {
             </View>
           </View>
         ))}
-        
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </LinearGradient>
@@ -350,5 +407,3 @@ const styles = StyleSheet.create({
     height: 40,
   },
 });
-
-

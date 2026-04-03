@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import * as Speech from 'expo-speech';
-import { checkInstructionSeen, markInstructionSeen } from '@/services/instructions';
-import { useFocusEffect } from 'expo-router';
+import { audioService } from "@/services/audio/audioService";
+import {
+    checkInstructionSeen,
+    markInstructionSeen,
+} from "@/services/instructions";
+import { useFocusEffect } from "expo-router";
+import * as Speech from "expo-speech";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useInstruction(screenId: string, instruction: string) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -9,9 +13,7 @@ export function useInstruction(screenId: string, instruction: string) {
 
   const stop = useCallback(async () => {
     try {
-      if (await Speech.isSpeakingAsync()) {
-        await Speech.stop();
-      }
+      Speech.stop();
       if (isMounted.current) setIsPlaying(false);
     } catch (e) {
       console.log("Error stopping speech:", e);
@@ -20,16 +22,15 @@ export function useInstruction(screenId: string, instruction: string) {
 
   const play = useCallback(async () => {
     try {
+      if (audioService.getIsMuted()) return;
+
       // Stop any existing speech first
       await stop();
-      
+
       if (!isMounted.current) return;
       setIsPlaying(true);
-      
-      Speech.speak(instruction, {
-        language: 'en-US',
-        rate: 0.8, // Slower for kids
-        pitch: 1.1, // Slightly higher pitch for kid-friendly tone
+
+      audioService.speak(instruction, {
         onDone: () => {
           if (isMounted.current) setIsPlaying(false);
         },
@@ -38,7 +39,7 @@ export function useInstruction(screenId: string, instruction: string) {
         },
         onError: () => {
           if (isMounted.current) setIsPlaying(false);
-        }
+        },
       });
     } catch (e) {
       console.log("Error playing instruction:", e);
@@ -74,7 +75,7 @@ export function useInstruction(screenId: string, instruction: string) {
       return () => {
         stop();
       };
-    }, [stop])
+    }, [stop]),
   );
 
   return { play, isPlaying, stop };

@@ -44,8 +44,8 @@ export default function NounCard({ lesson, isPlaying, onPlay, onStop }: NounCard
   return (
     <View style={[styles.card, { borderColor: lesson.borderColor, backgroundColor: lesson.color }]}>
       {/* Header */}
-      <View style={[styles.cardHeader, { backgroundColor: lesson.borderColor }]}>
-        <Text style={styles.cardTitle}>{lesson.title}</Text>
+      <View style={[styles.cardHeader, { backgroundColor: lesson.borderColor || "#999" }]}>
+        <Text style={styles.cardTitle}>{lesson.title || "Untitled"}</Text>
       </View>
 
       {/* Content */}
@@ -55,7 +55,7 @@ export default function NounCard({ lesson, isPlaying, onPlay, onStop }: NounCard
           styles.definition, 
           isPlaying && styles.highlightText
         ]}>
-          {lesson.definition}
+          {lesson.definition || ""}
         </Text>
 
         {/* 4 Ws Explanation */}
@@ -65,17 +65,17 @@ export default function NounCard({ lesson, isPlaying, onPlay, onStop }: NounCard
             where={lesson.where}
             how={lesson.how}
             when={lesson.when}
-            darkColor={lesson.borderColor}
+            darkColor={lesson.borderColor || "#999"}
           />
         )}
 
         <View style={styles.examplesContainer}>
-          <Text style={[styles.examplesLabel, { color: lesson.borderColor }]}>
+          <Text style={[styles.examplesLabel, { color: lesson.borderColor || "#999" }]}>
             Examples:
           </Text>
           <View style={styles.examplesList}>
-            {lesson.examples.map((ex, index) => (
-              <Text key={index} style={[styles.exampleText, { color: lesson.borderColor }]}>
+            {Array.isArray(lesson.examples) && lesson.examples.map((ex, index) => (
+              <Text key={index} style={[styles.exampleText, { color: lesson.borderColor || "#999" }]}>
                 {ex}
               </Text>
             ))}
@@ -84,7 +84,7 @@ export default function NounCard({ lesson, isPlaying, onPlay, onStop }: NounCard
 
         {/* TTS Button */}
         <TouchableOpacity 
-          style={[styles.speakButton, { backgroundColor: lesson.borderColor }]} 
+          style={[styles.speakButton, { backgroundColor: lesson.borderColor || "#999" }]} 
           onPress={handlePress}
         >
           <Ionicons 

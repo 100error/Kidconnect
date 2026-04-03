@@ -3,12 +3,22 @@ import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
 import SentenceCard from "@/components/ui/SentenceCard";
 import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useState } from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 type TenseItem = {
   id: string;
@@ -58,7 +68,11 @@ const tenseGroups: TenseGroup[] = [
       { id: "pa2", sentence: "I ate breakfast.", icon: "nutrition" },
       { id: "pa3", sentence: "I walked to school.", icon: "footsteps" },
       { id: "pa4", sentence: "We played a game.", icon: "game-controller" },
-      { id: "pa5", sentence: "He finished his work.", icon: "checkmark-circle" },
+      {
+        id: "pa5",
+        sentence: "He finished his work.",
+        icon: "checkmark-circle",
+      },
       { id: "pa6", sentence: "It rained yesterday.", icon: "rainy" },
     ],
   },
@@ -108,7 +122,11 @@ const tenseGroups: TenseGroup[] = [
     items: [
       { id: "t1", sentence: "I play now.", icon: "play-circle" },
       { id: "t2", sentence: "I played yesterday.", icon: "calendar" },
-      { id: "t3", sentence: "I will play tomorrow.", icon: "arrow-forward-circle" },
+      {
+        id: "t3",
+        sentence: "I will play tomorrow.",
+        icon: "arrow-forward-circle",
+      },
       { id: "t4", sentence: "See you later.", icon: "hand-left" },
       { id: "t5", sentence: "It is already done.", icon: "checkmark-done" },
       { id: "t6", sentence: "We start soon.", icon: "timer" },
@@ -174,30 +192,33 @@ export default function Tenses() {
   const padding = 16;
   // available width = screen width - (padding * 2) - (gap * (numColumns - 1))
   // card width = available width / numColumns
-  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   const { play: playInstruction } = useInstruction(
     "tenses",
-    "Learn about tenses! Tap a section to see how we use them, then tap the cards to hear examples."
+    "Learn about tenses! Tap a section to see how we use them, then tap the cards to hear examples.",
   );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
-  // Stop speech when leaving the screen
+  // Stop audio on unmount/blur
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
+      // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
+      void musicService.stopAsync();
+
       return () => {
         Speech.stop();
         setPlayingId(null);
       };
-    }, [])
+    }, []),
   );
 
   const handlePlay = (id: string, text: string) => {
-    Speech.stop();
     setPlayingId(id);
 
-    Speech.speak(text, {
-      rate: 0.75, // Slow rate for kids
+    Speech.stop();
+    TTS.speak(text, {
+      rate: 0.85, // Slow rate for kids
       pitch: 1.1,
       onDone: () => setPlayingId(null),
       onStopped: () => setPlayingId(null),
@@ -211,16 +232,16 @@ export default function Tenses() {
   };
 
   const handleGroupPlay = (group: TenseGroup) => {
-    Speech.stop();
     setPlayingId(group.title); // Use title as ID for group speech
 
     const textToSpeak = `${group.title}. What: ${group.what}. Where: ${group.where}. How: ${group.how}. When: ${group.when}.`;
-    Speech.speak(textToSpeak, {
-        rate: 0.75,
-        pitch: 1.1,
-        onDone: () => setPlayingId(null),
-        onStopped: () => setPlayingId(null),
-        onError: () => setPlayingId(null),
+    Speech.stop();
+    TTS.speak(textToSpeak, {
+      rate: 0.85,
+      pitch: 1.1,
+      onDone: () => setPlayingId(null),
+      onStopped: () => setPlayingId(null),
+      onError: () => setPlayingId(null),
     });
   };
 
@@ -232,35 +253,51 @@ export default function Tenses() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.introText}>
           Tap a section to learn, then tap cards to hear sentences!
         </Text>
 
         {tenseGroups.map((group) => (
           <View key={group.title} style={styles.groupContainer}>
-            <View style={[styles.groupHeader, { backgroundColor: group.darkColor }]}>
+            <View
+              style={[styles.groupHeader, { backgroundColor: group.darkColor }]}
+            >
               <Text style={styles.groupTitle}>{group.title}</Text>
-              <Ionicons 
-                name={playingId === group.title ? "stop-circle" : "volume-medium"} 
-                size={24} 
-                color="white" 
+              <Ionicons
+                name={
+                  playingId === group.title ? "stop-circle" : "volume-medium"
+                }
+                size={24}
+                color="white"
                 style={{ marginLeft: 10 }}
-                onPress={() => playingId === group.title ? handleStop() : handleGroupPlay(group)}
+                onPress={() =>
+                  playingId === group.title
+                    ? handleStop()
+                    : handleGroupPlay(group)
+                }
               />
             </View>
 
             <View style={styles.explanationContainer}>
-                <ExplanationView 
-                    what={group.what}
-                    where={group.where}
-                    how={group.how}
-                    when={group.when}
-                    darkColor={group.darkColor}
-                />
+              <ExplanationView
+                what={group.what}
+                where={group.where}
+                how={group.how}
+                when={group.when}
+                darkColor={group.darkColor}
+              />
             </View>
-            
-            <View style={[styles.grid, { flexDirection: 'row', flexWrap: 'wrap', gap: gap }]}>
+
+            <View
+              style={[
+                styles.grid,
+                { flexDirection: "row", flexWrap: "wrap", gap: gap },
+              ]}
+            >
               {group.items.map((item) => (
                 <SentenceCard
                   key={item.id}

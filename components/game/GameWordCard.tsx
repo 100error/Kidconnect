@@ -1,12 +1,21 @@
 import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
 import { ensureMicPermission } from "@/services/mic";
 import { speechService } from "@/services/speechService";
 import { addAttempt } from "@/services/speechlog";
-import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, ImageSourcePropType, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+    ActivityIndicator,
+    Image,
+    ImageSourcePropType,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 interface GameWordCardProps {
   word: string;
@@ -30,7 +39,9 @@ export default function GameWordCard({
   style,
 }: GameWordCardProps) {
   const [isListening, setIsListening] = useState(false);
-  const [feedback, setFeedback] = useState<"idle" | "listening" | "correct" | "incorrect">("idle");
+  const [feedback, setFeedback] = useState<
+    "idle" | "listening" | "correct" | "incorrect"
+  >("idle");
 
   useEffect(() => {
     return () => {
@@ -40,39 +51,48 @@ export default function GameWordCard({
 
   const handleSpeak = () => {
     if (!isListening) {
-      TTS.speak(word, { rate: 0.9, pitch: 1.1 });
+      Speech.stop();
+      TTS.speak(word, { rate: 0.85, pitch: 1.1 });
     }
   };
 
   const verifySpeech = async (uri: string) => {
     try {
-        const result = await speechService.recognizeSpeech(uri);
-        console.log(`Recognized: ${result.transcript} (Conf: ${result.confidence}) vs Target: ${word}`);
-        
-        const success = speechService.checkWord(result, word);
-        
-        // Log attempt
-        addAttempt({ activityId: 'pronunciation-game', text: result.transcript || '', success });
+      const result = await speechService.recognizeSpeech(uri);
+      console.log(
+        `Recognized: ${result.transcript} (Conf: ${result.confidence}) vs Target: ${word}`,
+      );
 
-        if (success) {
-            setFeedback("correct");
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            playbackService.playSound("correct");
-            TTS.speak("Correct!", { rate: 0.9, pitch: 1.1 });
-            if (onSuccess) onSuccess();
-        } else {
-            setFeedback("incorrect");
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            playbackService.playSound("incorrect");
-            TTS.speak("Try again.", { rate: 0.9, pitch: 1.1 });
-            if (onFailure) onFailure();
-            setTimeout(() => setFeedback("idle"), 1500);
-        }
-    } catch (e) {
-        console.log("Recognition error:", e);
+      const success = speechService.checkSpeechAccuracy(result, word);
+
+      // Log attempt
+      addAttempt({
+        activityId: "pronunciation-game",
+        text: result.transcript || "",
+        success,
+      });
+
+      if (success) {
+        setFeedback("correct");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        playbackService.playSound("correct");
+        Speech.stop();
+        TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
+        if (onSuccess) onSuccess();
+      } else {
         setFeedback("incorrect");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        playbackService.playSound("incorrect");
+        Speech.stop();
+        TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
         if (onFailure) onFailure();
         setTimeout(() => setFeedback("idle"), 1500);
+      }
+    } catch (e) {
+      console.log("Recognition error:", e);
+      setFeedback("incorrect");
+      if (onFailure) onFailure();
+      setTimeout(() => setFeedback("idle"), 1500);
     }
   };
 
@@ -85,9 +105,9 @@ export default function GameWordCard({
       try {
         const uri = await speechService.stopRecording();
         if (uri) {
-            await verifySpeech(uri); // await ensures we process before resetting completely if needed
+          await verifySpeech(uri); // await ensures we process before resetting completely if needed
         } else {
-            setFeedback("idle");
+          setFeedback("idle");
         }
       } catch (e) {
         setFeedback("idle");
@@ -97,45 +117,55 @@ export default function GameWordCard({
 
     // Start
     try {
-        const hasPermission = await ensureMicPermission();
-        if (!hasPermission) return;
+      const hasPermission = await ensureMicPermission();
+      if (!hasPermission) return;
 
-        setFeedback("listening");
-        setIsListening(true);
-        Haptics.selectionAsync();
-        
-        const started = await speechService.startRecording();
-        if (!started) {
-            setIsListening(false);
-            setFeedback("idle");
-        }
-    } catch (e) {
+      setFeedback("listening");
+      setIsListening(true);
+      Haptics.selectionAsync();
+
+      const started = await speechService.startRecording();
+      if (!started) {
         setIsListening(false);
         setFeedback("idle");
+      }
+    } catch (e) {
+      setIsListening(false);
+      setFeedback("idle");
     }
   };
 
   return (
-    <View style={[
-        styles.card, 
+    <View
+      style={[
+        styles.card,
         { backgroundColor: color },
         style,
         feedback === "correct" && styles.cardCorrect,
         feedback === "incorrect" && styles.cardIncorrect,
-        disabled && styles.cardDisabled
-    ]}>
+        disabled && styles.cardDisabled,
+      ]}
+    >
       {/* Tap Card to Hear */}
-      <TouchableOpacity 
-        style={styles.contentContainer} 
+      <TouchableOpacity
+        style={styles.contentContainer}
         onPress={handleSpeak}
         activeOpacity={0.7}
       >
         <View style={styles.iconContainer}>
-            {image ? (
-              <Image source={image} style={styles.iconImage} resizeMode="contain" />
-            ) : (
-              <Ionicons name={feedback === "correct" ? "checkmark-circle" : icon} size={48} color={feedback === "correct" ? "#4CAF50" : "#5D4037"} />
-            )}
+          {image ? (
+            <Image
+              source={image}
+              style={styles.iconImage}
+              resizeMode="contain"
+            />
+          ) : (
+            <Ionicons
+              name={feedback === "correct" ? "checkmark-circle" : icon}
+              size={48}
+              color={feedback === "correct" ? "#4CAF50" : "#5D4037"}
+            />
+          )}
         </View>
         <Text style={styles.word}>{word}</Text>
       </TouchableOpacity>
@@ -146,7 +176,7 @@ export default function GameWordCard({
           styles.micButton,
           isListening && styles.micListening,
           feedback === "correct" && styles.micCorrectButton,
-          disabled && styles.micDisabled
+          disabled && styles.micDisabled,
         ]}
         onPress={toggleListening}
         disabled={disabled || feedback === "correct"}
@@ -248,5 +278,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#757575",
     marginTop: 4,
-  }
+  },
 });

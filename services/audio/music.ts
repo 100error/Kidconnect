@@ -1,114 +1,156 @@
-import { Audio } from 'expo-av';
-import { settingsService } from '../settings';
+import { Audio } from "expo-av";
+import { settingsService } from "../settings";
 
-const BACKGROUND_MUSIC = require('../../assets/music/fun.mp3');
+export const MUSIC_SOURCES = {
+  home: require("../../assets/music/fun.mp3"),
+  profile: require("../../assets/music/fun.mp3"),
+  vocab: require("../../assets/music/fun.mp3"),
+  practice: require("../../assets/music/fun.mp3"),
+  games: require("../../assets/music/fun.mp3"),
+  default: require("../../assets/music/fun.mp3"),
+};
 
 class MusicService {
   private sound: Audio.Sound | null = null;
   private isPlaying: boolean = false;
-  private currentPath: any = null;
+  private currentSource: any = null;
+  private isMuted: boolean = false;
+  private fadeInterval: ReturnType<typeof setInterval> | null = null;
+  private currentVolume: number = 1;
 
   constructor() {
     // Listen for music setting changes
     settingsService.addListener(async (settings) => {
-      if (!settings.musicEnabled) {
+      this.isMuted = !settings.musicEnabled;
+      if (this.isMuted) {
         await this.stopAsync();
-      } else if (this.currentPath) {
-        // If music was enabled and we have a path, resume/start
-        await this.playAsync(this.currentPath);
+      } else if (this.currentSource && !this.isPlaying) {
+        // If music was enabled and we have a source but not playing, start
+        await this.playAsync(this.currentSource);
       }
+    });
+
+    // Initial mute state
+    settingsService.isMusicEnabled().then((enabled) => {
+      this.isMuted = !enabled;
     });
   }
 
-  async playAsync(source: any = BACKGROUND_MUSIC) {
-    this.currentPath = source;
-    
-    const musicEnabled = await settingsService.isMusicEnabled();
-    if (!musicEnabled) return;
-
-    if (this.sound) {
-      // If already playing the same source, don't restart
-      if (this.isPlaying && this.currentPath === source) return;
-      await this.stopAsync();
-    }
-
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        source,
-        { 
-          shouldPlay: true, 
-          isLooping: true,
-          volume: 0 // Start at 0 for fade in
-        }
-      );
-      this.sound = sound;
-      this.isPlaying = true;
-
-      // Fade in
-      await this.fadeIn();
-    } catch (error) {
-      console.log('Error playing music:', error);
+  private clearFade() {
+    if (this.fadeInterval) {
+      clearInterval(this.fadeInterval);
+      this.fadeInterval = null;
     }
   }
 
-  async stopAsync() {
-    if (!this.sound) return;
-
-    try {
-      // Fade out before stopping
-      await this.fadeOut();
-      await this.sound.stopAsync();
-      await this.sound.unloadAsync();
-      this.sound = null;
-      this.isPlaying = false;
-    } catch (error) {
-      console.log('Error stopping music:', error);
-    }
+  async duckVolume() {
+    if (this.isMuted || !this.sound || !this.isPlaying) return;
+    this.clearFade();
+    await this.fadeTo(0.3, 300);
   }
 
-  private async fadeIn(duration: number = 1000) {
-    if (!this.sound) return;
-    let volume = 0;
-    const interval = 50;
-    const step = 1 / (duration / interval);
-
-    const fade = setInterval(async () => {
-      volume += step;
-      if (volume >= 1) {
-        volume = 1;
-        clearInterval(fade);
-      }
-      if (this.sound) {
-        await this.sound.setVolumeAsync(volume);
-      } else {
-        clearInterval(fade);
-      }
-    }, interval);
+  async restoreVolume() {
+    if (this.isMuted || !this.sound || !this.isPlaying) return;
+    this.clearFade();
+    await this.fadeTo(1.0, 500);
   }
 
-  private async fadeOut(duration: number = 1000) {
+  private async fadeTo(targetVolume: number, duration: number) {
     if (!this.sound) return;
-    let volume = 1;
-    const interval = 50;
-    const step = 1 / (duration / interval);
+
+    const interval = 30;
+    const steps = duration / interval;
+    const stepAmount = (targetVolume - this.currentVolume) / steps;
 
     return new Promise<void>((resolve) => {
-      const fade = setInterval(async () => {
-        volume -= step;
-        if (volume <= 0) {
-          volume = 0;
-          clearInterval(fade);
+      this.fadeInterval = setInterval(async () => {
+        if (!this.sound) {
+          this.clearFade();
+          resolve();
+          return;
+        }
+
+        this.currentVolume += stepAmount;
+
+        // Check if we reached the target
+        if (
+          (stepAmount > 0 && this.currentVolume >= targetVolume) ||
+          (stepAmount < 0 && this.currentVolume <= targetVolume)
+        ) {
+          this.currentVolume = targetVolume;
+          this.clearFade();
           resolve();
         }
-        if (this.sound) {
-          await this.sound.setVolumeAsync(volume);
-        } else {
-          clearInterval(fade);
+
+        try {
+          await this.sound.setVolumeAsync(this.currentVolume);
+        } catch {
+          this.clearFade();
           resolve();
         }
       }, interval);
     });
   }
+
+  async playAsync(source: any = MUSIC_SOURCES.default) {
+    // 1. Prevent duplicate playback of the same track
+    if (this.currentSource === source && this.isPlaying) {
+      return;
+    }
+
+    this.currentSource = source;
+
+    // 2. Global Mute Check
+    if (this.isMuted) return;
+
+    try {
+      // 3. Single Instance Management - Stop previous before playing new
+      if (this.sound) {
+        await this.stopAsync();
+      }
+
+      const { sound } = await Audio.Sound.createAsync(source, {
+        shouldPlay: true,
+        isLooping: true,
+        volume: 0, // Start at 0 for fade in
+      });
+      this.sound = sound;
+      this.isPlaying = true;
+      this.currentVolume = 0;
+
+      // 4. Smooth Fade-In
+      await this.fadeTo(1.0, 1500);
+    } catch (error) {
+      console.log("Error playing music:", error);
+    }
+  }
+
+  async stopAsync() {
+    if (!this.sound) {
+      this.isPlaying = false;
+      return;
+    }
+
+    try {
+      // 5. Smooth Fade-Out
+      await this.fadeTo(0, 1000);
+
+      if (this.sound) {
+        await this.sound.stopAsync();
+        await this.sound.unloadAsync();
+      }
+      this.sound = null;
+      this.isPlaying = false;
+      this.currentVolume = 0;
+    } catch (error) {
+      console.log("Error stopping music:", error);
+      // Ensure state is cleared even on error
+      this.sound = null;
+      this.isPlaying = false;
+    }
+  }
+
+  // Remove old fadeIn/fadeOut methods as they are replaced by fadeTo
 }
 
 export const musicService = new MusicService();

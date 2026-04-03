@@ -1,17 +1,17 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from "expo-file-system/legacy";
 
 const SETTINGS_FILE = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}settings.json`;
 
 export interface Settings {
   hasSeenWelcome: boolean;
-  soundEnabled: boolean;
   musicEnabled: boolean;
+  soundEffectsEnabled: boolean;
 }
 
 const defaultSettings: Settings = {
   hasSeenWelcome: false,
-  soundEnabled: true,
   musicEnabled: true,
+  soundEffectsEnabled: true,
 };
 
 type SettingsListener = (settings: Settings) => void;
@@ -29,20 +29,32 @@ export const settingsService = {
 
       const content = await FileSystem.readAsStringAsync(SETTINGS_FILE);
       const settings = JSON.parse(content);
+
+      // Migration: if audioEnabled exists, use it for both music and sound
+      if (settings.audioEnabled !== undefined) {
+        if (settings.musicEnabled === undefined)
+          settings.musicEnabled = settings.audioEnabled;
+        if (settings.soundEffectsEnabled === undefined)
+          settings.soundEffectsEnabled = settings.audioEnabled;
+      }
+
       // Merge with default to ensure new keys exist
       return { ...defaultSettings, ...settings };
     } catch (error) {
-      console.error('Error reading settings:', error);
+      console.error("Error reading settings:", error);
       return defaultSettings;
     }
   },
 
   async saveSettings(settings: Settings): Promise<void> {
     try {
-      await FileSystem.writeAsStringAsync(SETTINGS_FILE, JSON.stringify(settings));
+      await FileSystem.writeAsStringAsync(
+        SETTINGS_FILE,
+        JSON.stringify(settings),
+      );
       this.notifyListeners(settings);
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error("Error saving settings:", error);
     }
   },
 
@@ -52,15 +64,15 @@ export const settingsService = {
     await this.saveSettings(settings);
   },
 
-  async setSoundEnabled(value: boolean): Promise<void> {
-    const settings = await this.getSettings();
-    settings.soundEnabled = value;
-    await this.saveSettings(settings);
-  },
-
   async setMusicEnabled(value: boolean): Promise<void> {
     const settings = await this.getSettings();
     settings.musicEnabled = value;
+    await this.saveSettings(settings);
+  },
+
+  async setSoundEffectsEnabled(value: boolean): Promise<void> {
+    const settings = await this.getSettings();
+    settings.soundEffectsEnabled = value;
     await this.saveSettings(settings);
   },
 
@@ -69,14 +81,14 @@ export const settingsService = {
     return settings.hasSeenWelcome;
   },
 
-  async isSoundEnabled(): Promise<boolean> {
-    const settings = await this.getSettings();
-    return settings.soundEnabled;
-  },
-
   async isMusicEnabled(): Promise<boolean> {
     const settings = await this.getSettings();
     return settings.musicEnabled;
+  },
+
+  async isSoundEffectsEnabled(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings.soundEffectsEnabled;
   },
 
   addListener(listener: SettingsListener) {
@@ -84,10 +96,10 @@ export const settingsService = {
   },
 
   removeListener(listener: SettingsListener) {
-    this.listeners = this.listeners.filter(l => l !== listener);
+    this.listeners = this.listeners.filter((l) => l !== listener);
   },
 
   notifyListeners(settings: Settings) {
-    this.listeners.forEach(l => l(settings));
-  }
+    this.listeners.forEach((l) => l(settings));
+  },
 };

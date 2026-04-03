@@ -1,16 +1,28 @@
 import InstructionButton from "@/components/InstructionButton";
-import BackButton from '@/components/ui/BackButton';
-import { useInstruction } from '@/hooks/useInstruction';
-import { addResult } from '@/services/progress';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useRouter } from 'expo-router';
-import * as Speech from 'expo-speech';
-import { playbackService } from '@/services/audio/playback';
-import { TTS } from '@/services/audio/tts';
-import React, { useEffect, useState } from 'react';
-import { Modal, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import BackButton from "@/components/ui/BackButton";
+import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
+import { addResult } from "@/services/progress";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect, useRouter } from "expo-router";
+import * as Speech from "expo-speech";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 // ----------------------------------------------------------------------------
 // TYPES & DATA
@@ -26,85 +38,85 @@ type Question = {
 };
 
 const staticQuestions: Question[] = [
-  { 
-    id: '1', 
-    part1: 'She', 
-    part2: 'dinner with her grandparents every Monday.', 
-    options: ['has', 'have'], 
-    correct: 'has',
-    icon: 'restaurant'
-  }, 
-  { 
-    id: '2', 
-    part1: 'Gemma', 
-    part2: 'going to school.', 
-    options: ['enjoy', 'enjoys'], 
-    correct: 'enjoys',
-    icon: 'school'
+  {
+    id: "1",
+    part1: "She",
+    part2: "dinner with her grandparents every Monday.",
+    options: ["has", "have"],
+    correct: "has",
+    icon: "restaurant",
   },
-  { 
-    id: '3', 
-    part1: 'Her dogs', 
-    part2: 'at the postman when he comes.', 
-    options: ['bark', 'barks'], 
-    correct: 'bark',
-    icon: 'paw'
+  {
+    id: "2",
+    part1: "Gemma",
+    part2: "going to school.",
+    options: ["enjoy", "enjoys"],
+    correct: "enjoys",
+    icon: "school",
   },
-  { 
-    id: '4', 
-    part1: 'She has to', 
-    part2: 'so her friend doesn\'t wake up.', 
-    options: ['tiptoe', 'tiptoes'], 
-    correct: 'tiptoe',
-    icon: 'walk'
+  {
+    id: "3",
+    part1: "Her dogs",
+    part2: "at the postman when he comes.",
+    options: ["bark", "barks"],
+    correct: "bark",
+    icon: "paw",
   },
-  { 
-    id: '5', 
-    part1: 'My mother', 
-    part2: 'at the same stall every time.', 
-    options: ['shop', 'shops'], 
-    correct: 'shops',
-    icon: 'cart'
+  {
+    id: "4",
+    part1: "She has to",
+    part2: "so her friend doesn't wake up.",
+    options: ["tiptoe", "tiptoes"],
+    correct: "tiptoe",
+    icon: "walk",
   },
-  { 
-    id: '6', 
-    part1: 'Patricia and her friends', 
-    part2: 'to play at the park.', 
-    options: ['love', 'loves'], 
-    correct: 'love',
-    icon: 'happy'
+  {
+    id: "5",
+    part1: "My mother",
+    part2: "at the same stall every time.",
+    options: ["shop", "shops"],
+    correct: "shops",
+    icon: "cart",
   },
-  { 
-    id: '7', 
-    part1: 'Nasreen', 
-    part2: 'money packets during Hari Raya.', 
-    options: ['receive', 'receives'], 
-    correct: 'receives',
-    icon: 'gift'
+  {
+    id: "6",
+    part1: "Patricia and her friends",
+    part2: "to play at the park.",
+    options: ["love", "loves"],
+    correct: "love",
+    icon: "happy",
   },
-  { 
-    id: '8', 
-    part1: 'We always', 
-    part2: 'up early in the morning.', 
-    options: ['get', 'gets'], 
-    correct: 'get',
-    icon: 'sunny'
+  {
+    id: "7",
+    part1: "Nasreen",
+    part2: "money packets during Hari Raya.",
+    options: ["receive", "receives"],
+    correct: "receives",
+    icon: "gift",
   },
-  { 
-    id: '9', 
-    part1: 'They', 
-    part2: 'English very well.', 
-    options: ['speak', 'speaks'], 
-    correct: 'speak',
-    icon: 'language'
+  {
+    id: "8",
+    part1: "We always",
+    part2: "up early in the morning.",
+    options: ["get", "gets"],
+    correct: "get",
+    icon: "sunny",
   },
-  { 
-    id: '10', 
-    part1: 'She', 
-    part2: 'tennis on Saturdays.', 
-    options: ['play', 'plays'], 
-    correct: 'plays',
-    icon: 'tennisball'
+  {
+    id: "9",
+    part1: "They",
+    part2: "English very well.",
+    options: ["speak", "speaks"],
+    correct: "speak",
+    icon: "language",
+  },
+  {
+    id: "10",
+    part1: "She",
+    part2: "tennis on Saturdays.",
+    options: ["play", "plays"],
+    correct: "plays",
+    icon: "tennisball",
   },
 ];
 
@@ -138,8 +150,8 @@ export default function PresentSimpleTenseScreen() {
 
   // Instructions
   const { play: playInstruction } = useInstruction(
-    'presentsimpletense',
-    "Fill in the blank with the correct verb in the bracket."
+    "presentsimpletense",
+    "Fill in the blank with the correct verb in the bracket.",
   );
 
   // Stop audio on unmount/blur
@@ -148,7 +160,7 @@ export default function PresentSimpleTenseScreen() {
       return () => {
         Speech.stop();
       };
-    }, [])
+    }, []),
   );
 
   // Handle saving when all done
@@ -159,17 +171,17 @@ export default function PresentSimpleTenseScreen() {
       const answeredCount = Object.keys(answers).length;
       if (answeredCount === questions.length && !isCompleted) {
         setIsCompleted(true);
-        
+
         // Calculate score
         let score = 0;
-        Object.keys(answers).forEach(key => {
+        Object.keys(answers).forEach((key) => {
           if (results[key]) score++;
         });
 
         // Save progress
         await addResult({
-          activityId: 'presentsimpletense',
-          category: 'practice',
+          activityId: "presentsimpletense",
+          category: "practice",
           score: score,
           maxScore: questions.length,
           completed: true,
@@ -177,9 +189,17 @@ export default function PresentSimpleTenseScreen() {
 
         // Final feedback
         if (score >= 6) {
-          Speech.speak(`Great job! You got ${score} out of 10.`, { rate: 0.9, pitch: 1.1 });
+          Speech.stop();
+          TTS.speak(`Great job! You got ${score} out of 10.`, {
+            rate: 0.85,
+            pitch: 1.1,
+          });
         } else {
-          Speech.speak(`Good try! You got ${score} out of 10. Keep practicing.`, { rate: 0.9, pitch: 1.1 });
+          Speech.stop();
+          TTS.speak(`Good try! You got ${score} out of 10. Keep practicing.`, {
+            rate: 0.85,
+            pitch: 1.1,
+          });
         }
 
         setFinalScore(score);
@@ -191,6 +211,7 @@ export default function PresentSimpleTenseScreen() {
   }, [answers, results, isCompleted]);
 
   const handleTryAgain = () => {
+    Speech.stop();
     setAnswers({});
     setResults({});
     setActiveId(null);
@@ -201,30 +222,33 @@ export default function PresentSimpleTenseScreen() {
   };
 
   const handleExit = () => {
+    Speech.stop();
     setModalVisible(false);
-    router.replace('/pract');
+    router.replace("/pract");
   };
 
   const handleSelect = (question: Question, option: string) => {
     // Speak the word
     Speech.stop();
-    Speech.speak(option, { rate: 0.9, pitch: 1.1 });
+    TTS.speak(option, { rate: 0.85, pitch: 1.1 });
 
     const isCorrect = option === question.correct;
-    
-    setAnswers(prev => ({ ...prev, [question.id]: option }));
-    setResults(prev => ({ ...prev, [question.id]: isCorrect }));
+
+    setAnswers((prev) => ({ ...prev, [question.id]: option }));
+    setResults((prev) => ({ ...prev, [question.id]: isCorrect }));
     setActiveId(null); // Close selection view if open
 
     // Feedback
     if (isCorrect) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playbackService.playSound("correct");
-      TTS.speak("Correct!", { rate: 1.0, pitch: 1.2 });
+      Speech.stop();
+      TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       playbackService.playSound("incorrect");
-      TTS.speak("Try again.", { rate: 1.0, pitch: 0.9 });
+      Speech.stop();
+      TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
     }
   };
 
@@ -236,13 +260,22 @@ export default function PresentSimpleTenseScreen() {
 
   const speakSentence = (text: string) => {
     Speech.stop();
-    Speech.speak(text, { rate: 0.85 });
+    TTS.speak(text, { rate: 0.85, pitch: 1.1 });
   };
+
+  // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
+  useFocusEffect(
+    useCallback(() => {
+      void musicService.stopAsync();
+      return () => {
+        Speech.stop();
+      };
+    }, []),
+  );
 
   return (
     <LinearGradient colors={["#FFF3E0", "#FFE0B2"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        
         {/* HEADER */}
         <View style={styles.header}>
           <BackButton targetRoute="/pract" color="#5D4037" />
@@ -258,7 +291,17 @@ export default function PresentSimpleTenseScreen() {
         </View>
 
         {/* LIST */}
-        <ScrollView contentContainerStyle={[styles.listContent, { flexDirection: isTablet ? 'row' : 'column', flexWrap: 'wrap', gap: isTablet ? gap : 0 }]} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.listContent,
+            {
+              flexDirection: isTablet ? "row" : "column",
+              flexWrap: "wrap",
+              gap: isTablet ? gap : 0,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           {questions.map((q, index) => {
             const answer = answers[q.id];
             const isCorrect = results[q.id];
@@ -271,7 +314,12 @@ export default function PresentSimpleTenseScreen() {
                   <View style={styles.numberBadge}>
                     <Text style={styles.numberText}>{index + 1}</Text>
                   </View>
-                  <Ionicons name={q.icon} size={28} color="#FB8C00" style={styles.icon} />
+                  <Ionicons
+                    name={q.icon}
+                    size={28}
+                    color="#FB8C00"
+                    style={styles.icon}
+                  />
                 </View>
 
                 {/* SENTENCE */}
@@ -283,15 +331,15 @@ export default function PresentSimpleTenseScreen() {
                         styles.blank,
                         isCorrect && styles.blankCorrect,
                         isWrong && styles.blankWrong,
-                        isOpen && styles.blankActive
+                        isOpen && styles.blankActive,
                       ]}
                       onPress={() => handleBlankTap(q.id)}
                     >
                       {answer ? ` ${answer} ` : " _______ "}
-                    </Text>
-                    {" "}{q.part2}
+                    </Text>{" "}
+                    {q.part2}
                   </Text>
-                  
+
                   {/* BRACKETS / OPTIONS */}
                   <Text style={styles.bracketsText}>
                     ({q.options.join(" / ")})
@@ -303,9 +351,9 @@ export default function PresentSimpleTenseScreen() {
                 {isOpen && !isCorrect && (
                   <View style={styles.optionsContainer}>
                     {q.options.map((opt) => (
-                      <TouchableOpacity 
-                        key={opt} 
-                        style={styles.optionButton} 
+                      <TouchableOpacity
+                        key={opt}
+                        style={styles.optionButton}
                         onPress={() => handleSelect(q, opt)}
                       >
                         <Text style={styles.optionButtonText}>{opt}</Text>
@@ -317,19 +365,22 @@ export default function PresentSimpleTenseScreen() {
                 {/* FEEDBACK ICON */}
                 {isCorrect && (
                   <View style={styles.feedbackIcon}>
-                    <Ionicons name="checkmark-circle" size={32} color="#4CAF50" />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={32}
+                      color="#4CAF50"
+                    />
                   </View>
                 )}
-                 {isWrong && !isOpen && (
+                {isWrong && !isOpen && (
                   <View style={styles.feedbackIcon}>
                     <Ionicons name="close-circle" size={32} color="#F44336" />
                   </View>
                 )}
-
               </View>
             );
           })}
-          
+
           <View style={{ height: 40 }} />
         </ScrollView>
 
@@ -343,17 +394,22 @@ export default function PresentSimpleTenseScreen() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Practice Complete!</Text>
-              
+
               <View style={styles.scoreContainer}>
                 <Text style={styles.scoreLabel}>Your Score</Text>
                 <Text style={styles.scoreValue}>{finalScore} / 10</Text>
               </View>
 
-              <View style={[styles.resultBadge, finalScore >= 6 ? styles.resultPass : styles.resultFail]}>
-                <Ionicons 
-                  name={finalScore >= 6 ? "checkmark-circle" : "close-circle"} 
-                  size={32} 
-                  color="#FFF" 
+              <View
+                style={[
+                  styles.resultBadge,
+                  finalScore >= 6 ? styles.resultPass : styles.resultFail,
+                ]}
+              >
+                <Ionicons
+                  name={finalScore >= 6 ? "checkmark-circle" : "close-circle"}
+                  size={32}
+                  color="#FFF"
                 />
                 <Text style={styles.resultText}>
                   {finalScore >= 6 ? "PASSED" : "FAILED"}
@@ -361,12 +417,18 @@ export default function PresentSimpleTenseScreen() {
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.modalButton, styles.tryAgainButton]} onPress={handleTryAgain}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.tryAgainButton]}
+                  onPress={handleTryAgain}
+                >
                   <Ionicons name="refresh" size={24} color="#FFF" />
                   <Text style={styles.modalButtonText}>TRY AGAIN</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.modalButton, styles.exitButton]} onPress={handleExit}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.exitButton]}
+                  onPress={handleExit}
+                >
                   <Ionicons name="exit" size={24} color="#FFF" />
                   <Text style={styles.modalButtonText}>EXIT</Text>
                 </TouchableOpacity>
@@ -374,7 +436,6 @@ export default function PresentSimpleTenseScreen() {
             </View>
           </View>
         </Modal>
-
       </SafeAreaView>
     </LinearGradient>
   );
@@ -386,31 +447,31 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 15,
   },
   headerTitle: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#5D4037',
+    fontWeight: "bold",
+    color: "#5D4037",
   },
   instructionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     marginHorizontal: 20,
     padding: 15,
     borderRadius: 15,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
@@ -419,47 +480,47 @@ const styles = StyleSheet.create({
   instructionText: {
     flex: 1,
     fontSize: 16,
-    color: '#5D4037',
+    color: "#5D4037",
     marginRight: 10,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   listContent: {
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderRadius: 20,
     padding: 20,
     marginBottom: 15,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3,
-    width: '100%',
+    width: "100%",
   },
   cardTablet: {
     maxWidth: 600,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 10,
   },
   numberBadge: {
-    backgroundColor: '#FB8C00',
+    backgroundColor: "#FB8C00",
     width: 30,
     height: 30,
     borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
   },
   numberText: {
-    color: '#FFF',
-    fontWeight: 'bold',
+    color: "#FFF",
+    fontWeight: "bold",
     fontSize: 14,
   },
   icon: {
@@ -470,69 +531,69 @@ const styles = StyleSheet.create({
   },
   sentenceText: {
     fontSize: 18,
-    color: '#3E2723',
+    color: "#3E2723",
     lineHeight: 30,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   blank: {
-    fontWeight: 'bold',
-    color: '#1E88E5',
-    textDecorationLine: 'underline',
+    fontWeight: "bold",
+    color: "#1E88E5",
+    textDecorationLine: "underline",
   },
   blankCorrect: {
-    color: '#4CAF50',
-    textDecorationLine: 'none',
+    color: "#4CAF50",
+    textDecorationLine: "none",
   },
   blankWrong: {
-    color: '#F44336',
+    color: "#F44336",
   },
   blankActive: {
-    backgroundColor: '#E3F2FD',
-    color: '#1565C0',
+    backgroundColor: "#E3F2FD",
+    color: "#1565C0",
   },
   bracketsText: {
     fontSize: 16,
-    color: '#8D6E63',
-    fontStyle: 'italic',
+    color: "#8D6E63",
+    fontStyle: "italic",
     marginTop: 5,
   },
   optionsContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginTop: 10,
   },
   optionButton: {
     flex: 1,
-    backgroundColor: '#FB8C00',
+    backgroundColor: "#FB8C00",
     paddingVertical: 10,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   optionButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   feedbackIcon: {
-    position: 'absolute',
+    position: "absolute",
     right: 15,
     top: 15,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderRadius: 25,
     padding: 30,
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
@@ -540,27 +601,27 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#5D4037',
+    fontWeight: "bold",
+    color: "#5D4037",
     marginBottom: 20,
   },
   scoreContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
   },
   scoreLabel: {
     fontSize: 18,
-    color: '#8D6E63',
+    color: "#8D6E63",
     marginBottom: 5,
   },
   scoreValue: {
     fontSize: 48,
-    fontWeight: 'bold',
-    color: '#FB8C00',
+    fontWeight: "bold",
+    color: "#FB8C00",
   },
   resultBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 50,
@@ -568,39 +629,39 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   resultPass: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
   },
   resultFail: {
-    backgroundColor: '#F44336',
+    backgroundColor: "#F44336",
   },
   resultText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   modalButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 15,
-    width: '100%',
+    width: "100%",
   },
   modalButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 15,
     borderRadius: 15,
     gap: 8,
   },
   tryAgainButton: {
-    backgroundColor: '#FB8C00',
+    backgroundColor: "#FB8C00",
   },
   exitButton: {
-    backgroundColor: '#9E9E9E',
+    backgroundColor: "#9E9E9E",
   },
   modalButtonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

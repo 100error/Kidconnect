@@ -1,19 +1,20 @@
-import { Audio } from 'expo-av';
-import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from 'expo-router';
-import * as Speech from 'expo-speech';
-import React, { useCallback, useEffect, useRef } from 'react';
+import { audioService } from "@/services/audio/audioService";
+import { Audio } from "expo-av";
+import * as Haptics from "expo-haptics";
+import { useFocusEffect } from "expo-router";
+import * as Speech from "expo-speech";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-  Animated,
-  ImageBackground,
-  ImageSourcePropType,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  ViewStyle,
-} from 'react-native';
+    Animated,
+    ImageBackground,
+    ImageSourcePropType,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    ViewStyle,
+} from "react-native";
 
 interface KidFriendlyCardProps {
   title: string;
@@ -29,7 +30,7 @@ interface KidFriendlyCardProps {
 export default function KidFriendlyCard({
   title,
   onPress,
-  color = '#FFFFFF',
+  color = "#FFFFFF",
   index = 0,
   icon,
   image,
@@ -59,7 +60,7 @@ export default function KidFriendlyCard({
       return () => {
         unloadSound();
       };
-    }, [])
+    }, []),
   );
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function KidFriendlyCard({
       toValue: 0.95,
       useNativeDriver: true,
     }).start();
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
@@ -110,31 +111,19 @@ export default function KidFriendlyCard({
     try {
       await unloadSound(); // Cleanup previous
 
-      const { sound } = await Audio.Sound.createAsync(
-        require('@/assets/music/drop.mp3')
+      const sound = await audioService.playSound(
+        require("@/assets/music/drop.mp3"),
       );
-      soundRef.current = sound;
-      await sound.playAsync();
-      
-      // Unload after playing
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          try {
-             if (soundRef.current === sound) {
-                 soundRef.current = null;
-             }
-             await sound.unloadAsync();
-          } catch (e) {}
-        }
-      });
+      if (sound) {
+        soundRef.current = sound;
+      }
     } catch (e) {
       // Ignore sound error
     }
 
     // 2. TTS (Optional) - Audio Element
     if (enableTTS) {
-      Speech.stop();
-      Speech.speak(title, { rate: 1.0, pitch: 1.1 });
+      audioService.speak(title);
     }
 
     // 3. Navigate
@@ -144,7 +133,9 @@ export default function KidFriendlyCard({
   const CardContent = () => (
     <>
       {icon && !image && <Text style={styles.icon}>{icon}</Text>}
-      <Text style={[styles.title, image ? styles.titleWithImage : undefined]}>{title}</Text>
+      <Text style={[styles.title, image ? styles.titleWithImage : undefined]}>
+        {title}
+      </Text>
     </>
   );
 
@@ -191,18 +182,18 @@ export default function KidFriendlyCard({
 const styles = StyleSheet.create({
   wrapper: {
     marginVertical: 10,
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
   },
   card: {
-    width: '90%',
+    width: "90%",
     minHeight: 100, // Ensure touch target size
     paddingVertical: 20,
     paddingHorizontal: 20,
     borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 4,
@@ -210,7 +201,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 5,
     elevation: 6,
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   cardWithImage: {
     paddingVertical: 0,
@@ -218,29 +209,32 @@ const styles = StyleSheet.create({
     height: 120, // Taller for images
   },
   imageBackground: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)', // Ensure text contrast
+    backgroundColor: "rgba(0,0,0,0.3)", // Ensure text contrast
     borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
+    justifyContent: "center",
+    alignItems: "center",
+    flexDirection: "row",
   },
   title: {
     fontSize: 24, // Large readable text (Element 1)
-    fontWeight: '700',
-    color: '#2d3436',
-    textAlign: 'center',
-    fontFamily: Platform.select({ ios: 'System', android: 'sans-serif-rounded' }),
+    fontWeight: "700",
+    color: "#2d3436",
+    textAlign: "center",
+    fontFamily: Platform.select({
+      ios: "System",
+      android: "sans-serif-rounded",
+    }),
   },
   titleWithImage: {
-    color: '#ffffff',
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    color: "#ffffff",
+    textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },

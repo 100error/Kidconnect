@@ -1,12 +1,22 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import { useInstruction } from '@/hooks/useInstruction';
+import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 type ComparisonItem = {
   id: string;
@@ -33,14 +43,14 @@ export default function Comparison() {
   const numColumns = isTablet ? 2 : 1;
   const gap = 12;
   const padding = 20;
-  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   // Instructions
   const { play: playInstruction } = useInstruction(
-    'comparison',
-    "We use comparison words to talk about how things are different. Tap any card to hear examples!"
+    "comparison",
+    "We use comparison words to talk about how things are different. Tap any card to hear examples!",
   );
 
   const sections: ComparisonSection[] = useMemo(
@@ -53,205 +63,251 @@ export default function Comparison() {
         items: [
           {
             id: "c1",
-            base: "Fast", comparative: "Faster", superlative: "Fastest",
+            base: "Fast",
+            comparative: "Faster",
+            superlative: "Fastest",
             baseSentence: "The car is fast.",
             compSentence: "The plane is faster than the car.",
             supSentence: "The rocket is the fastest.",
-            icon: "speedometer"
+            icon: "speedometer",
           },
           {
             id: "c2",
-            base: "Tall", comparative: "Taller", superlative: "Tallest",
+            base: "Tall",
+            comparative: "Taller",
+            superlative: "Tallest",
             baseSentence: "The tree is tall.",
             compSentence: "The tower is taller than the tree.",
             supSentence: "The mountain is the tallest.",
-            icon: "arrow-up"
+            icon: "arrow-up",
           },
           {
             id: "c3",
-            base: "Cold", comparative: "Colder", superlative: "Coldest",
+            base: "Cold",
+            comparative: "Colder",
+            superlative: "Coldest",
             baseSentence: "The water is cold.",
             compSentence: "The ice is colder than water.",
             supSentence: "The South Pole is the coldest.",
-            icon: "snow"
+            icon: "snow",
           },
           {
             id: "c4",
-            base: "Old", comparative: "Older", superlative: "Oldest",
+            base: "Old",
+            comparative: "Older",
+            superlative: "Oldest",
             baseSentence: "My bike is old.",
             compSentence: "Grandpa is older than me.",
             supSentence: "The dinosaur bones are the oldest.",
-            icon: "time"
+            icon: "time",
           },
-           {
+          {
             id: "c5",
-            base: "Strong", comparative: "Stronger", superlative: "Strongest",
+            base: "Strong",
+            comparative: "Stronger",
+            superlative: "Strongest",
             baseSentence: "The boy is strong.",
             compSentence: "The athlete is stronger.",
             supSentence: "The elephant is the strongest.",
-            icon: "barbell"
-          }
-        ]
+            icon: "barbell",
+          },
+        ],
       },
       {
         title: "Double the Letter",
         color: "#FFF3E0", // Light Orange
         darkColor: "#F57C00",
-        description: "If a short word ends in one vowel + one consonant, double the last letter!",
+        description:
+          "If a short word ends in one vowel + one consonant, double the last letter!",
         items: [
           {
             id: "d1",
-            base: "Big", comparative: "Bigger", superlative: "Biggest",
+            base: "Big",
+            comparative: "Bigger",
+            superlative: "Biggest",
             baseSentence: "The apple is big.",
             compSentence: "The melon is bigger.",
             supSentence: "The pumpkin is the biggest.",
-            icon: "expand"
+            icon: "expand",
           },
           {
             id: "d2",
-            base: "Hot", comparative: "Hotter", superlative: "Hottest",
+            base: "Hot",
+            comparative: "Hotter",
+            superlative: "Hottest",
             baseSentence: "The tea is hot.",
             compSentence: "The fire is hotter.",
             supSentence: "The sun is the hottest.",
-            icon: "flame"
+            icon: "flame",
           },
           {
             id: "d3",
-            base: "Sad", comparative: "Sadder", superlative: "Saddest",
+            base: "Sad",
+            comparative: "Sadder",
+            superlative: "Saddest",
             baseSentence: "The movie was sad.",
             compSentence: "Losing a toy is sadder.",
             supSentence: "Whatever makes you cry is the saddest.",
-            icon: "sad"
+            icon: "sad",
           },
           {
             id: "d4",
-            base: "Thin", comparative: "Thinner", superlative: "Thinnest",
+            base: "Thin",
+            comparative: "Thinner",
+            superlative: "Thinnest",
             baseSentence: "The paper is thin.",
             compSentence: "The thread is thinner.",
             supSentence: "The hair is the thinnest.",
-            icon: "resize"
-          }
-        ]
+            icon: "resize",
+          },
+        ],
       },
       {
         title: "Change 'y' to 'i'",
         color: "#F3E5F5", // Light Purple
         darkColor: "#8E24AA",
-        description: "If a word ends in 'y', change it to 'i' before adding -er or -est.",
+        description:
+          "If a word ends in 'y', change it to 'i' before adding -er or -est.",
         items: [
           {
             id: "y1",
-            base: "Happy", comparative: "Happier", superlative: "Happiest",
+            base: "Happy",
+            comparative: "Happier",
+            superlative: "Happiest",
             baseSentence: "I am happy today.",
             compSentence: "I was happier yesterday.",
             supSentence: "My birthday is the happiest day.",
-            icon: "happy"
+            icon: "happy",
           },
           {
             id: "y2",
-            base: "Heavy", comparative: "Heavier", superlative: "Heaviest",
+            base: "Heavy",
+            comparative: "Heavier",
+            superlative: "Heaviest",
             baseSentence: "The rock is heavy.",
             compSentence: "The car is heavier.",
             supSentence: "The truck is the heaviest.",
-            icon: "fitness"
+            icon: "fitness",
           },
           {
             id: "y3",
-            base: "Easy", comparative: "Easier", superlative: "Easiest",
+            base: "Easy",
+            comparative: "Easier",
+            superlative: "Easiest",
             baseSentence: "Walking is easy.",
             compSentence: "Sitting is easier.",
             supSentence: "Sleeping is the easiest.",
-            icon: "thumbs-up"
+            icon: "thumbs-up",
           },
-           {
+          {
             id: "y4",
-            base: "Funny", comparative: "Funnier", superlative: "Funniest",
+            base: "Funny",
+            comparative: "Funnier",
+            superlative: "Funniest",
             baseSentence: "The joke was funny.",
             compSentence: "The clown was funnier.",
             supSentence: "The movie was the funniest.",
-            icon: "happy-outline"
-          }
-        ]
+            icon: "happy-outline",
+          },
+        ],
       },
       {
         title: "Long Words (More / Most)",
         color: "#E8F5E9", // Light Green
         darkColor: "#43A047",
-        description: "For long words, use 'more' and 'most' instead of changing the ending.",
+        description:
+          "For long words, use 'more' and 'most' instead of changing the ending.",
         items: [
           {
             id: "l1",
-            base: "Beautiful", comparative: "More Beautiful", superlative: "Most Beautiful",
+            base: "Beautiful",
+            comparative: "More Beautiful",
+            superlative: "Most Beautiful",
             baseSentence: "The flower is beautiful.",
             compSentence: "The sunset is more beautiful.",
             supSentence: "The rainbow is the most beautiful.",
-            icon: "flower"
+            icon: "flower",
           },
           {
             id: "l2",
-            base: "Exciting", comparative: "More Exciting", superlative: "Most Exciting",
+            base: "Exciting",
+            comparative: "More Exciting",
+            superlative: "Most Exciting",
             baseSentence: "The game is exciting.",
             compSentence: "The ride is more exciting.",
             supSentence: "The trip was the most exciting.",
-            icon: "rocket"
+            icon: "rocket",
           },
           {
             id: "l3",
-            base: "Dangerous", comparative: "More Dangerous", superlative: "Most Dangerous",
+            base: "Dangerous",
+            comparative: "More Dangerous",
+            superlative: "Most Dangerous",
             baseSentence: "The snake is dangerous.",
             compSentence: "The shark is more dangerous.",
             supSentence: "The volcano is the most dangerous.",
-            icon: "warning"
+            icon: "warning",
           },
-           {
+          {
             id: "l4",
-            base: "Comfortable", comparative: "More Comfortable", superlative: "Most Comfortable",
+            base: "Comfortable",
+            comparative: "More Comfortable",
+            superlative: "Most Comfortable",
             baseSentence: "The chair is comfortable.",
             compSentence: "The sofa is more comfortable.",
             supSentence: "My bed is the most comfortable.",
-            icon: "bed"
-          }
-        ]
+            icon: "bed",
+          },
+        ],
       },
       {
         title: "Irregular Words",
         color: "#FFFDE7", // Light Yellow
         darkColor: "#FBC02D",
-        description: "These words change completely! You have to remember them.",
+        description:
+          "These words change completely! You have to remember them.",
         items: [
           {
             id: "i1",
-            base: "Good", comparative: "Better", superlative: "Best",
+            base: "Good",
+            comparative: "Better",
+            superlative: "Best",
             baseSentence: "The cookie is good.",
             compSentence: "The cake is better.",
             supSentence: "The ice cream is the best.",
-            icon: "star"
+            icon: "star",
           },
           {
             id: "i2",
-            base: "Bad", comparative: "Worse", superlative: "Worst",
+            base: "Bad",
+            comparative: "Worse",
+            superlative: "Worst",
             baseSentence: "The rain is bad for the picnic.",
             compSentence: "The storm is worse.",
             supSentence: "The hurricane is the worst.",
-            icon: "thunderstorm"
+            icon: "thunderstorm",
           },
           {
             id: "i3",
-            base: "Little", comparative: "Less", superlative: "Least",
+            base: "Little",
+            comparative: "Less",
+            superlative: "Least",
             baseSentence: "I have a little water.",
             compSentence: "You have less water.",
             supSentence: "He has the least water.",
-            icon: "water"
+            icon: "water",
           },
-           {
+          {
             id: "i4",
-            base: "Far", comparative: "Farther", superlative: "Farthest",
+            base: "Far",
+            comparative: "Farther",
+            superlative: "Farthest",
             baseSentence: "The park is far.",
             compSentence: "The zoo is farther.",
             supSentence: "The moon is the farthest.",
-            icon: "planet"
-          }
-        ]
+            icon: "planet",
+          },
+        ],
       },
       {
         title: "Equality (As ... As)",
@@ -261,38 +317,61 @@ export default function Comparison() {
         items: [
           {
             id: "eq1",
-            base: "Big", comparative: "As Big As", superlative: "Same Size",
+            base: "Big",
+            comparative: "As Big As",
+            superlative: "Same Size",
             baseSentence: "The red ball is big.",
             compSentence: "The blue ball is as big as the red one.",
             supSentence: "They are the same size.",
-            icon: "ellipse"
+            icon: "ellipse",
           },
           {
             id: "eq2",
-            base: "Fast", comparative: "As Fast As", superlative: "Same Speed",
+            base: "Fast",
+            comparative: "As Fast As",
+            superlative: "Same Speed",
             baseSentence: "The horse is fast.",
             compSentence: "The deer is as fast as the horse.",
             supSentence: "They run at the same speed.",
-            icon: "speedometer"
-          }
-        ]
-      }
+            icon: "speedometer",
+          },
+        ],
+      },
     ],
-    []
+    [],
   );
 
   const speak = (text: string, id: string) => {
-    Speech.stop();
-    setPlayingId(id);
-    Speech.speak(text, {
-      rate: 0.75,
-      pitch: 1.1,
-      onDone: () => setPlayingId(null),
-      onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null)
-    });
-    Haptics.selectionAsync();
+    try {
+      if (!text) return;
+      setPlayingId(id);
+      Speech.stop();
+      TTS.speak(text, {
+        rate: 0.85,
+        pitch: 1.1,
+        onDone: () => setPlayingId(null),
+        onStopped: () => setPlayingId(null),
+        onError: (error) => {
+          console.warn("TTS Error in Comparison:", error);
+          setPlayingId(null);
+        },
+      });
+      Haptics.selectionAsync().catch(() => {});
+    } catch (error) {
+      console.warn("speak error in Comparison:", error);
+      setPlayingId(null);
+    }
   };
+
+  // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
+  useFocusEffect(
+    useCallback(() => {
+      void musicService.stopAsync();
+      return () => {
+        Speech.stop();
+      };
+    }, []),
+  );
 
   return (
     <LinearGradient colors={["#E3F2FD", "#FFFFFF"]} style={styles.container}>
@@ -302,53 +381,97 @@ export default function Comparison() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.introText}>
-          We use comparison words to talk about how things are different. Tap any card to hear examples!
+          We use comparison words to talk about how things are different. Tap
+          any card to hear examples!
         </Text>
 
         {sections.map((section, index) => (
           <View key={index} style={styles.sectionContainer}>
-             <View style={[styles.sectionHeader, { borderLeftColor: section.darkColor }]}>
-              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
+            <View
+              style={[
+                styles.sectionHeader,
+                { borderLeftColor: section.darkColor },
+              ]}
+            >
+              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>
+                {section.title}
+              </Text>
             </View>
             <Text style={styles.sectionDescription}>{section.description}</Text>
 
-            <View style={[styles.cardsContainer, { flexDirection: "row", flexWrap: "wrap" }]}>
+            <View
+              style={[
+                styles.cardsContainer,
+                { flexDirection: "row", flexWrap: "wrap" },
+              ]}
+            >
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.card, { width: cardWidth }]}
-                  onPress={() => speak(`${item.base}. ${item.baseSentence} ... ${item.comparative}. ${item.compSentence} ... ${item.superlative}. ${item.supSentence}`, item.id)}
+                  onPress={() =>
+                    speak(
+                      `${item.base}. ${item.baseSentence} ... ${item.comparative}. ${item.compSentence} ... ${item.superlative}. ${item.supSentence}`,
+                      item.id,
+                    )
+                  }
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={playingId === item.id ? [section.color, "#FFFFFF"] : ["#FFFFFF", "#FAFAFA"]}
+                    colors={
+                      playingId === item.id
+                        ? [section.color, "#FFFFFF"]
+                        : ["#FFFFFF", "#FAFAFA"]
+                    }
                     style={styles.cardGradient}
                   >
                     <View style={styles.iconContainer}>
-                        <Ionicons name={item.icon} size={28} color={section.darkColor} />
+                      <Ionicons
+                        name={item.icon}
+                        size={28}
+                        color={section.darkColor}
+                      />
                     </View>
-                    
+
                     <View style={styles.cardContent}>
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Base:</Text>
-                            <Text style={styles.word}>{item.base}</Text>
-                        </View>
-                         <View style={styles.row}>
-                            <Text style={styles.label}>Compare:</Text>
-                            <Text style={[styles.word, { color: section.darkColor }]}>{item.comparative}</Text>
-                        </View>
-                         <View style={styles.row}>
-                            <Text style={styles.label}>Super:</Text>
-                            <Text style={[styles.word, { color: section.darkColor, fontWeight: "900" }]}>{item.superlative}</Text>
-                        </View>
+                      <View style={styles.row}>
+                        <Text style={styles.label}>Base:</Text>
+                        <Text style={styles.word}>{item.base}</Text>
+                      </View>
+                      <View style={styles.row}>
+                        <Text style={styles.label}>Compare:</Text>
+                        <Text
+                          style={[styles.word, { color: section.darkColor }]}
+                        >
+                          {item.comparative}
+                        </Text>
+                      </View>
+                      <View style={styles.row}>
+                        <Text style={styles.label}>Super:</Text>
+                        <Text
+                          style={[
+                            styles.word,
+                            { color: section.darkColor, fontWeight: "900" },
+                          ]}
+                        >
+                          {item.superlative}
+                        </Text>
+                      </View>
                     </View>
 
                     {playingId === item.id && (
-                        <View style={styles.playingIndicator}>
-                             <Ionicons name="volume-high" size={20} color={section.darkColor} />
-                        </View>
+                      <View style={styles.playingIndicator}>
+                        <Ionicons
+                          name="volume-high"
+                          size={20}
+                          color={section.darkColor}
+                        />
+                      </View>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>

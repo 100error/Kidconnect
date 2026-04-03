@@ -1,12 +1,20 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { TTS } from "@/services/audio/tts";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import {
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
+} from "react-native";
 
 type SpellingSection = {
   title: string;
@@ -30,12 +38,12 @@ export default function Spelled() {
   const numColumns = isTablet ? 2 : 1;
   const gap = 16;
   const padding = 16;
-  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   // Audio enabled
   const { play: playInstruction } = useInstruction(
     "spelled",
-    "Learn the secrets of spelling! Tap any card to hear the rule and examples."
+    "Learn the secrets of spelling! Tap any card to hear the rule and examples.",
   );
 
   useFocusEffect(
@@ -43,7 +51,7 @@ export default function Spelled() {
       return () => {
         Speech.stop();
       };
-    }, [])
+    }, []),
   );
 
   const sections: SpellingSection[] = useMemo(
@@ -56,20 +64,22 @@ export default function Spelled() {
           {
             id: "v1",
             ruleName: "Silent E",
-            description: "The silent E at the end makes the vowel say its name.",
+            description:
+              "The silent E at the end makes the vowel say its name.",
             exampleWords: ["hop → hope", "cap → cape"],
             exampleSentence: "I hope you wear your cape!",
-            icon: "🤫"
+            icon: "🤫",
           },
           {
             id: "v2",
             ruleName: "Vowel Teams",
-            description: "When two vowels go walking, the first one does the talking.",
+            description:
+              "When two vowels go walking, the first one does the talking.",
             exampleWords: ["rain", "boat", "eat"],
             exampleSentence: "The boat sails in the rain.",
-            icon: "🛶"
-          }
-        ]
+            icon: "🛶",
+          },
+        ],
       },
       {
         title: "Consonant Tricks",
@@ -79,18 +89,20 @@ export default function Spelled() {
           {
             id: "c1",
             ruleName: "Soft C",
-            description: "The letter C sounds like 'S' when it comes before e, i, or y.",
+            description:
+              "The letter C sounds like 'S' when it comes before e, i, or y.",
             exampleWords: ["city", "ice", "cycle"],
             exampleSentence: "We cycle in the city.",
-            icon: "🏙️"
+            icon: "🏙️",
           },
           {
             id: "c2",
             ruleName: "Soft G",
-            description: "The letter G sounds like 'J' when it comes before e, i, or y.",
+            description:
+              "The letter G sounds like 'J' when it comes before e, i, or y.",
             exampleWords: ["giraffe", "gym", "cage"],
             exampleSentence: "The giraffe is in a cage.",
-            icon: "🦒"
+            icon: "🦒",
           },
           {
             id: "c3",
@@ -98,9 +110,9 @@ export default function Spelled() {
             description: "Q and U stick like glue. They are always together.",
             exampleWords: ["queen", "quick", "quiet"],
             exampleSentence: "The queen is very quick.",
-            icon: "👑"
-          }
-        ]
+            icon: "👑",
+          },
+        ],
       },
       {
         title: "Adding Endings",
@@ -110,28 +122,31 @@ export default function Spelled() {
           {
             id: "e1",
             ruleName: "Doubling Rule",
-            description: "For 1-syllable words with 1 short vowel and 1 consonant: Double the last letter before adding -ing or -ed.",
+            description:
+              "For 1-syllable words with 1 short vowel and 1 consonant: Double the last letter before adding -ing or -ed.",
             exampleWords: ["run → running", "stop → stopped"],
             exampleSentence: "He stopped running.",
-            icon: "🏃"
+            icon: "🏃",
           },
           {
             id: "e2",
             ruleName: "Drop the E",
-            description: "Drop the silent E before adding an ending that starts with a vowel.",
+            description:
+              "Drop the silent E before adding an ending that starts with a vowel.",
             exampleWords: ["make → making", "like → liked"],
             exampleSentence: "I liked making a cake.",
-            icon: "🍰"
+            icon: "🍰",
           },
           {
             id: "e3",
             ruleName: "Change Y to I",
-            description: "If a word ends in a consonant + y, change y to i before adding -es or -ed.",
+            description:
+              "If a word ends in a consonant + y, change y to i before adding -es or -ed.",
             exampleWords: ["baby → babies", "cry → cried"],
             exampleSentence: "The babies cried loudly.",
-            icon: "👶"
-          }
-        ]
+            icon: "👶",
+          },
+        ],
       },
       {
         title: "Tricky Pairs",
@@ -141,10 +156,11 @@ export default function Spelled() {
           {
             id: "t1",
             ruleName: "I Before E",
-            description: "I before E, except after C, or when sounding like 'A'.",
+            description:
+              "I before E, except after C, or when sounding like 'A'.",
             exampleWords: ["piece", "receive", "neighbor"],
             exampleSentence: "My neighbor received a piece of pie.",
-            icon: "🥧"
+            icon: "🥧",
           },
           {
             id: "t2",
@@ -152,18 +168,23 @@ export default function Spelled() {
             description: "Add -es to words ending in s, x, z, ch, or sh.",
             exampleWords: ["bus → buses", "box → boxes", "wish → wishes"],
             exampleSentence: "He wishes for two boxes.",
-            icon: "🎁"
-          }
-        ]
-      }
+            icon: "🎁",
+          },
+        ],
+      },
     ],
-    []
+    [],
   );
 
   const speak = (text: string) => {
-    Speech.stop();
-    Speech.speak(text, { rate: 0.85, pitch: 1.1 });
-    Haptics.selectionAsync();
+    try {
+      if (!text) return;
+      Speech.stop();
+      TTS.speak(text, { rate: 0.85, pitch: 1.1 });
+      Haptics.selectionAsync().catch(() => {});
+    } catch (error) {
+      console.warn("speak error in Spelled:", error);
+    }
   };
 
   return (
@@ -174,24 +195,44 @@ export default function Spelled() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.description}>
-          Learn the secrets of spelling! Tap any card to hear the rule and examples.
+          Learn the secrets of spelling! Tap any card to hear the rule and
+          examples.
         </Text>
 
         {sections.map((section) => (
           <View key={section.title} style={styles.sectionContainer}>
-            <View style={[styles.sectionHeader, { borderLeftColor: section.darkColor }]}>
-              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
+            <View
+              style={[
+                styles.sectionHeader,
+                { borderLeftColor: section.darkColor },
+              ]}
+            >
+              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>
+                {section.title}
+              </Text>
             </View>
 
-            <View style={[styles.cards, { flexDirection: "row", flexWrap: "wrap" }]}>
+            <View
+              style={[styles.cards, { flexDirection: "row", flexWrap: "wrap" }]}
+            >
               {section.items.map((item) => (
-                <View key={item.id} style={[styles.cardWrapper, { width: cardWidth }]}>
+                <View
+                  key={item.id}
+                  style={[styles.cardWrapper, { width: cardWidth }]}
+                >
                   <TouchableOpacity
                     style={styles.card}
                     activeOpacity={0.9}
-                    onPress={() => speak(`${item.ruleName}. ${item.description}. Example: ${item.exampleSentence}`)}
+                    onPress={() =>
+                      speak(
+                        `${item.ruleName}. ${item.description}. Example: ${item.exampleSentence}`,
+                      )
+                    }
                   >
                     <LinearGradient
                       colors={["#FFFFFF", section.color]}
@@ -201,19 +242,32 @@ export default function Spelled() {
                     >
                       <View style={styles.cardHeader}>
                         <Text style={styles.icon}>{item.icon}</Text>
-                        <Text style={[styles.ruleName, { color: section.darkColor }]}>{item.ruleName}</Text>
+                        <Text
+                          style={[
+                            styles.ruleName,
+                            { color: section.darkColor },
+                          ]}
+                        >
+                          {item.ruleName}
+                        </Text>
                       </View>
-                      
+
                       <Text style={styles.ruleDesc}>{item.description}</Text>
-                      
+
                       <View style={styles.exampleBox}>
                         <Text style={styles.exampleLabel}>Words:</Text>
-                        <Text style={styles.exampleText}>{item.exampleWords.join(", ")}</Text>
+                        <Text style={styles.exampleText}>
+                          {item.exampleWords.join(", ")}
+                        </Text>
                       </View>
 
                       <View style={[styles.exampleBox, { marginTop: 8 }]}>
                         <Text style={styles.exampleLabel}>Sentence:</Text>
-                        <Text style={[styles.exampleText, { fontStyle: 'italic' }]}>&quot;{item.exampleSentence}&quot;</Text>
+                        <Text
+                          style={[styles.exampleText, { fontStyle: "italic" }]}
+                        >
+                          &quot;{item.exampleSentence}&quot;
+                        </Text>
                       </View>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -222,7 +276,7 @@ export default function Spelled() {
             </View>
           </View>
         ))}
-        
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </LinearGradient>
@@ -231,7 +285,7 @@ export default function Spelled() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
   },
   header: {
     flexDirection: "row",
@@ -239,7 +293,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingTop: 36,
-    paddingBottom: 16
+    paddingBottom: 16,
   },
   backButton: {
     flexDirection: "row",
@@ -247,13 +301,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFFCC",
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 14
+    borderRadius: 14,
   },
   backText: {
     marginLeft: 6,
     fontSize: 14,
     fontWeight: "600",
-    color: "#2D2D2D"
+    color: "#2D2D2D",
   },
   title: {
     fontSize: 24,
@@ -262,7 +316,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: 16,
-    paddingBottom: 24
+    paddingBottom: 24,
   },
   description: {
     fontSize: 16,
@@ -272,25 +326,25 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     backgroundColor: "#FFFFFF80",
     padding: 12,
-    borderRadius: 12
+    borderRadius: 12,
   },
   sectionContainer: {
-    marginBottom: 24
+    marginBottom: 24,
   },
   sectionHeader: {
     marginBottom: 12,
     paddingLeft: 12,
     borderLeftWidth: 4,
-    justifyContent: "center"
+    justifyContent: "center",
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.5
+    letterSpacing: 0.5,
   },
   cards: {
-    gap: 16
+    gap: 16,
   },
   cardWrapper: {
     borderRadius: 16,
@@ -299,14 +353,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    backgroundColor: "#fff" // fallback
+    backgroundColor: "#fff", // fallback
   },
   card: {
     borderRadius: 16,
-    overflow: "hidden"
+    overflow: "hidden",
   },
   cardGradient: {
-    padding: 16
+    padding: 16,
   },
   cardHeader: {
     flexDirection: "row",
@@ -315,41 +369,41 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#00000010",
-    paddingBottom: 8
+    paddingBottom: 8,
   },
   icon: {
-    fontSize: 28
+    fontSize: 28,
   },
   ruleName: {
     fontSize: 19,
     fontWeight: "800",
-    flex: 1
+    flex: 1,
   },
   ruleDesc: {
     fontSize: 16,
     color: "#37474F",
     lineHeight: 22,
-    marginBottom: 16
+    marginBottom: 16,
   },
   exampleBox: {
     backgroundColor: "#FFFFFF80",
     padding: 10,
     borderRadius: 10,
     flexDirection: "row",
-    gap: 8
+    gap: 8,
   },
   exampleLabel: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#455A64"
+    color: "#455A64",
   },
   exampleText: {
     fontSize: 15,
     color: "#263238",
     flex: 1,
-    lineHeight: 20
+    lineHeight: 20,
   },
   bottomSpacer: {
-    height: 40
-  }
+    height: 40,
+  },
 });

@@ -1,14 +1,15 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import { useInstruction } from '@/hooks/useInstruction';
+import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { playbackService } from "@/services/audio/playback";
+import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import { playbackService } from "@/services/audio/playback";
-import { TTS } from "@/services/audio/tts";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
     Modal,
     SafeAreaView,
@@ -17,32 +18,32 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View, 
-    useWindowDimensions
-} from "react-native"; 
+    View,
+    useWindowDimensions,
+} from "react-native";
 
 // 1. Data Setup (Tenses: Present, Past, Future)
 const staticRawData = [
-  { id: "1", sentence: "I ___ with my friends.", answer: "play" },
-  { id: "2", sentence: "She ___ to school yesterday.", answer: "walked" },
-  { id: "3", sentence: "We will ___ to the zoo.", answer: "go" },
-  { id: "4", sentence: "The frog ___ in the pond.", answer: "jumps" },
-  { id: "5", sentence: "He ___ a big bird.", answer: "saw" },
-  { id: "6", sentence: "Dogs ___ very fast.", answer: "run" },
-  { id: "7", sentence: "We ___ pizza last night.", answer: "ate" },
-  { id: "8", sentence: "I will ___ you tomorrow.", answer: "see" },
-  { id: "9", sentence: "The duck ___ in the water.", answer: "swims" },
-  { id: "10", sentence: "\"Hello,\" ___ the teacher.", answer: "said" },
-  { id: "11", sentence: "The baby ___ loudly.", answer: "cries" },
-  { id: "12", sentence: "I ___ my homework after school.", answer: "do" },
-  { id: "13", sentence: "She ___ a red dress.", answer: "wears" },
-  { id: "14", sentence: "We ___ in the park yesterday.", answer: "played" },
-  { id: "15", sentence: "The boy ___ a tall tree.", answer: "climbs" },
-  { id: "16", sentence: "They ___ milk every morning.", answer: "drink" },  
-  { id: "17", sentence: "I ___ a funny story.", answer: "heard" },
-  { id: "18", sentence: "The cat ___ on the sofa.", answer: "sleeps" },
-  { id: "19", sentence: "We ___ a movie last night.", answer: "watched" },
-  { id: "20", sentence: "She ___ a beautiful song.", answer: "sings" },   
+  { id: "1", sentence: "The stars ___ at night.", answer: "twinkle" },
+  { id: "2", sentence: "I ___ my dirty teeth.", answer: "brush" },
+  { id: "3", sentence: "She ___ her blue bike.", answer: "rides" },
+  { id: "4", sentence: "We ___ a sweet cake.", answer: "baked" },
+  { id: "5", sentence: "The plane ___ in the sky.", answer: "flies" },
+  { id: "6", sentence: "He ___ a funny book.", answer: "reads" },
+  { id: "7", sentence: "The fish ___ in the sea.", answer: "swims" },
+  { id: "8", sentence: "They ___ a big sandcastle.", answer: "built" },
+  { id: "9", sentence: "I ___ a glass of milk.", answer: "drank" },
+  { id: "10", sentence: "The alarm clock ___.", answer: "rang" },
+  { id: "11", sentence: "She ___ a pretty picture.", answer: "drew" },
+  { id: "12", sentence: "We ___ to the teacher.", answer: "listen" },
+  { id: "13", sentence: "The dog ___ its tail.", answer: "wags" },
+  { id: "14", sentence: "I ___ my homework.", answer: "finished" },
+  { id: "15", sentence: "He ___ the soccer ball.", answer: "kicked" },
+  { id: "16", sentence: "They ___ a loud song.", answer: "sing" },
+  { id: "17", sentence: "The flowers ___ in spring.", answer: "grow" },
+  { id: "18", sentence: "I ___ a red apple.", answer: "ate" },
+  { id: "19", sentence: "She ___ the wooden door.", answer: "closed" },
+  { id: "20", sentence: "We ___ the tall tree.", answer: "climbed" },
 ];
 
 export default function SentenceBuild() {
@@ -52,37 +53,42 @@ export default function SentenceBuild() {
 
   const [questions, setQuestions] = useState<typeof staticRawData>([]);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [completedSentences, setCompletedSentences] = useState<{ [key: string]: string }>({}); // id -> word
+  const [completedSentences, setCompletedSentences] = useState<{
+    [key: string]: string;
+  }>({}); // id -> word
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
   const [restartCount, setRestartCount] = useState(0);
 
-  // Randomize questions on mount/restart
+  // Randomize questions on mount/restart - Slice to 10 to match score calculation
   useEffect(() => {
-    const shuffled = [...staticRawData].sort(() => 0.5 - Math.random());
+    const shuffled = [...staticRawData]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 10);
     setQuestions(shuffled);
   }, [restartCount]);
 
   // Instructions
   const { play: playInstruction } = useInstruction(
-    'sentencebuild',
-    "Fill in the blanks! Choose the correct word to complete the sentence."
+    "sentencebuild",
+    "Fill in the blanks! Choose the correct word to complete the sentence.",
   );
 
   // Stop audio on unmount/blur
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
+      void musicService.stopAsync();
       return () => {
         Speech.stop();
       };
-    }, [])
+    }, []),
   );
 
   // Derived state
   const wordBank = React.useMemo(() => {
     if (questions.length === 0) return [];
     // Get all answers from the CURRENT shuffled questions
-    const answers = questions.map(d => d.answer);
+    const answers = questions.map((d) => d.answer);
     // Shuffle them again for the bank
     return [...answers].sort(() => 0.5 - Math.random());
   }, [questions]);
@@ -94,11 +100,12 @@ export default function SentenceBuild() {
 
   const handleWordSelect = (word: string) => {
     if (isWordUsed(word)) return;
-    Speech.speak(word, { rate: 0.85 });
+    Speech.stop();
+    TTS.speak(word, { rate: 0.85, pitch: 1.1 });
     setSelectedWord(word === selectedWord ? null : word);
   };
 
-  const handleSentencePress = (item: typeof staticRawData[0]) => {
+  const handleSentencePress = (item: (typeof staticRawData)[0]) => {
     // If already completed, ignore
     if (completedSentences[item.id]) return;
 
@@ -107,7 +114,7 @@ export default function SentenceBuild() {
       // Replace ___ with "blank" for audio
       const textToRead = item.sentence.replace("___", "blank");
       Speech.stop();
-      Speech.speak(textToRead, { rate: 0.85, pitch: 1.1 });
+      TTS.speak(textToRead, { rate: 0.85, pitch: 1.1 });
       return;
     }
 
@@ -117,8 +124,9 @@ export default function SentenceBuild() {
       setCompletedSentences(newCompleted);
       setSelectedWord(null);
       playbackService.playSound("correct");
-      TTS.speak("Correct!", { rate: 0.95 });
-      
+      Speech.stop();
+      TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
+
       // Check completion
       if (Object.keys(newCompleted).length === questions.length) {
         setTimeout(finishGame, 1000);
@@ -126,15 +134,16 @@ export default function SentenceBuild() {
     } else {
       // Incorrect
       playbackService.playSound("incorrect");
-      TTS.speak("Try again.", { rate: 0.95 });
-      setMistakes(prev => new Set(prev).add(item.id));
+      Speech.stop();
+      TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
+      setMistakes((prev) => new Set(prev).add(item.id));
     }
   };
 
   const finishGame = async () => {
     const score = Math.max(0, 10 - mistakes.size);
     const passed = score >= 6;
-    
+
     await addResult({
       activityId: "sentence-build-worksheet",
       category: "practice",
@@ -144,19 +153,25 @@ export default function SentenceBuild() {
     });
 
     setShowResult(true);
-    Speech.speak(passed ? "Great work! You finished the worksheet." : "Keep practicing!", { rate: 0.95 });
+    Speech.stop();
+    TTS.speak(
+      passed ? "Great work! You finished the worksheet." : "Keep practicing!",
+      { rate: 0.85, pitch: 1.1 },
+    );
   };
 
   const handleRestart = () => {
+    Speech.stop();
     setCompletedSentences({});
     setMistakes(new Set());
     setSelectedWord(null);
     setShowResult(false);
-    setRestartCount(prev => prev + 1);
+    setRestartCount((prev) => prev + 1);
   };
 
   const handleExit = () => {
-    router.replace('/pract');
+    Speech.stop();
+    router.replace("/pract");
   };
 
   return (
@@ -168,13 +183,21 @@ export default function SentenceBuild() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <BackButton targetRoute="/pract" color="#E65100" />
-            <InstructionButton onPress={playInstruction} style={{ marginLeft: 10 }} />
+            <InstructionButton
+              onPress={playInstruction}
+              style={{ marginLeft: 10 }}
+            />
           </View>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Sentence Building</Text>
-            <Ionicons name="pencil" size={24} color="#E65100" style={styles.headerIcon} />
+            <Ionicons
+              name="pencil"
+              size={24}
+              color="#E65100"
+              style={styles.headerIcon}
+            />
           </View>
-          <View style={styles.headerRight} /> 
+          <View style={styles.headerRight} />
         </View>
 
         {/* 2. Instruction Section */}
@@ -193,16 +216,18 @@ export default function SentenceBuild() {
                   style={[
                     styles.wordPill,
                     selectedWord === word && styles.wordPillSelected,
-                    isWordUsed(word) && styles.wordPillUsed
+                    isWordUsed(word) && styles.wordPillUsed,
                   ]}
                   onPress={() => handleWordSelect(word)}
                   disabled={isWordUsed(word)}
                 >
-                  <Text style={[
-                    styles.wordText,
-                    selectedWord === word && styles.wordTextSelected,
-                    isWordUsed(word) && styles.wordTextUsed
-                  ]}>
+                  <Text
+                    style={[
+                      styles.wordText,
+                      selectedWord === word && styles.wordTextSelected,
+                      isWordUsed(word) && styles.wordTextUsed,
+                    ]}
+                  >
                     {word}
                   </Text>
                 </TouchableOpacity>
@@ -211,17 +236,22 @@ export default function SentenceBuild() {
           </View>
 
           {/* 4. Sentence List Section */}
-          <View style={[styles.worksheetContainer, isTablet && styles.worksheetContainerTablet]}>
+          <View
+            style={[
+              styles.worksheetContainer,
+              isTablet && styles.worksheetContainerTablet,
+            ]}
+          >
             {questions.map((item, index) => {
               const isCompleted = !!completedSentences[item.id];
               const parts = item.sentence.split("___");
-              
+
               return (
                 <TouchableOpacity
                   key={item.id}
                   style={[
                     styles.sentenceRow,
-                    isCompleted && styles.sentenceRowCorrect
+                    isCompleted && styles.sentenceRowCorrect,
                   ]}
                   onPress={() => handleSentencePress(item)}
                   activeOpacity={0.8}
@@ -230,23 +260,32 @@ export default function SentenceBuild() {
                   <View style={styles.sentenceTextContainer}>
                     <Text style={styles.sentenceText}>
                       {parts[0]}
-                      <Text style={[
-                        styles.blankSpace,
-                        isCompleted && styles.filledBlank
-                      ]}>
-                        {isCompleted ? ` ${completedSentences[item.id]} ` : " ______ "}
+                      <Text
+                        style={[
+                          styles.blankSpace,
+                          isCompleted && styles.filledBlank,
+                        ]}
+                      >
+                        {isCompleted
+                          ? ` ${completedSentences[item.id]} `
+                          : " ______ "}
                       </Text>
                       {parts[1]}
                     </Text>
                   </View>
                   {isCompleted && (
-                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" style={{marginLeft: 8}} />
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color="#4CAF50"
+                      style={{ marginLeft: 8 }}
+                    />
                   )}
                 </TouchableOpacity>
               );
             })}
           </View>
-          
+
           <View style={{ height: 40 }} />
         </ScrollView>
 
@@ -260,28 +299,48 @@ export default function SentenceBuild() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                {(10 - mistakes.size) >= 6 ? "Worksheet Complete! 📝" : "Good Try! 📚"}
+                {10 - mistakes.size >= 6
+                  ? "Worksheet Complete! 📝"
+                  : "Good Try! 📚"}
               </Text>
-              
+
               <View style={styles.resultScoreContainer}>
                 <Text style={styles.resultScoreLabel}>Your Score</Text>
-                <Text style={[
-                  styles.resultScoreValue, 
-                  { color: (10 - mistakes.size) >= 6 ? "#4CAF50" : "#FF9800" }
-                ]}>
+                <Text
+                  style={[
+                    styles.resultScoreValue,
+                    { color: 10 - mistakes.size >= 6 ? "#4CAF50" : "#FF9800" },
+                  ]}
+                >
                   {10 - mistakes.size} / 10
                 </Text>
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.tryAgainButton} onPress={handleRestart}>
+                <TouchableOpacity
+                  style={styles.tryAgainButton}
+                  onPress={handleRestart}
+                >
                   <Text style={styles.buttonText}>Try Again</Text>
-                  <Ionicons name="refresh" size={20} color="#FFF" style={{marginLeft: 8}} />
+                  <Ionicons
+                    name="refresh"
+                    size={20}
+                    color="#FFF"
+                    style={{ marginLeft: 8 }}
+                  />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.exitButton} onPress={handleExit}>
+                <TouchableOpacity
+                  style={styles.exitButton}
+                  onPress={handleExit}
+                >
                   <Text style={styles.buttonText}>Exit</Text>
-                  <Ionicons name="exit-outline" size={20} color="#FFF" style={{marginLeft: 8}} />
+                  <Ionicons
+                    name="exit-outline"
+                    size={20}
+                    color="#FFF"
+                    style={{ marginLeft: 8 }}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -451,7 +510,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textDecorationLine: "underline",
   },
-  
+
   // Modal Styles
   modalOverlay: {
     flex: 1,

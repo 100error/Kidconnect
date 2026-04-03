@@ -1,6 +1,6 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
-import { useInstruction } from '@/hooks/useInstruction';
+import { useInstruction } from "@/hooks/useInstruction";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
@@ -9,14 +9,25 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
-import { FlatList, Image, Modal, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import {
+  Image,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 // Define all available icons
 const ICON_ASSETS = [
   { word: "Battery", source: require("@/assets/icons/battery.png") },
   { word: "Bird", source: require("@/assets/icons/bird.png") },
   { word: "Box", source: require("@/assets/icons/box.png") },
-  { word: "Boy", source: require("@/assets/icons/boy.png") }, 
+  { word: "Boy", source: require("@/assets/icons/boy.png") },
   { word: "Brain", source: require("@/assets/icons/brain.png") },
   { word: "Bunny", source: require("@/assets/icons/bunny.png") },
   { word: "Hamburger", source: require("@/assets/icons/hamburger.png") },
@@ -71,23 +82,25 @@ const ICON_ASSETS = [
   { word: "Yarn", source: require("@/assets/icons/yarn.png") },
 ];
 
- interface CardItem {
+interface CardItem {
   id: string;
   matchKey: string;
   word: string;
   imageSource?: any;
-  type: 'image' | 'word';
+  type: "image" | "word";
   color: string;
-  state: 'idle' | 'selected' | 'matched' | 'mismatch';
+  state: "idle" | "selected" | "matched" | "mismatch";
 }
 
 export default function PracticePronunciation() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
-  const numColumns = isTablet ? 5 : 3;
-  const GAP = 10;
-  const PADDING = 20;
-  const cardSize = (width - (PADDING * 2) - (GAP * (numColumns - 1))) / numColumns;
+  const numColumns = isTablet ? 5 : 4; // Use 4 columns for mobile to fit 16 items perfectly
+  const GAP = 12;
+  const PADDING = 16;
+  const cardSize = (width - PADDING * 2 - GAP * (numColumns - 1)) / numColumns;
+
+  const TOTAL_PAIRS = 8; // 16 items total
 
   const router = useRouter();
   const [restartCount, setRestartCount] = useState(0);
@@ -99,8 +112,8 @@ export default function PracticePronunciation() {
 
   // Instructions
   const { play: playInstruction } = useInstruction(
-    'pronunciation',
-    "Tap matching pairs! Find the picture and the word that goes with it."
+    "pronunciation",
+    "Tap matching pairs! Find the picture and the word that goes with it.",
   );
 
   // Stop audio on unmount/blur
@@ -109,7 +122,7 @@ export default function PracticePronunciation() {
       return () => {
         Speech.stop();
       };
-    }, [])
+    }, []),
   );
 
   // Pastel colors palette
@@ -130,34 +143,36 @@ export default function PracticePronunciation() {
   useEffect(() => {
     // 1. Get all valid items (Using ICON_ASSETS now)
     const validItems = ICON_ASSETS;
-    
-    // 2. Select 10 random items
-    const shuffledItems = [...validItems].sort(() => 0.5 - Math.random()).slice(0, 10);
-    
+
+    // 2. Select random items
+    const shuffledItems = [...validItems]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, TOTAL_PAIRS);
+
     // 3. Create Pairs (Image Card + Word Card)
     const newCards: CardItem[] = [];
     shuffledItems.forEach((item, index) => {
       const color = cardColors[index % cardColors.length];
-      
+
       // Image Card
       newCards.push({
         id: `img-${index}`,
         matchKey: item.word,
         word: item.word,
         imageSource: item.source,
-        type: 'image',
+        type: "image",
         color: color,
-        state: 'idle'
+        state: "idle",
       });
-      
+
       // Word Card
       newCards.push({
         id: `txt-${index}`,
         matchKey: item.word,
         word: item.word,
-        type: 'word',
+        type: "word",
         color: color,
-        state: 'idle'
+        state: "idle",
       });
     });
 
@@ -170,33 +185,41 @@ export default function PracticePronunciation() {
   }, [restartCount]);
 
   const handleCardPress = (card: CardItem) => {
-    if (isProcessing || card.state === 'matched' || card.state === 'selected') return;
+    if (isProcessing || card.state === "matched" || card.state === "selected")
+      return;
 
     // Play TTS on tap (optional but helpful)
-    TTS.stop();
-    TTS.speak(card.word, { rate: 0.85 });
+    Speech.stop();
+    TTS.speak(card.word, { rate: 0.85, pitch: 1.1 });
 
     if (!selectedId) {
       // First card selected
-      setCards(prev => prev.map(c => c.id === card.id ? { ...c, state: 'selected' } : c));
+      setCards((prev) =>
+        prev.map((c) => (c.id === card.id ? { ...c, state: "selected" } : c)),
+      );
       setSelectedId(card.id);
     } else {
       // Second card selected
-      const firstCard = cards.find(c => c.id === selectedId);
+      const firstCard = cards.find((c) => c.id === selectedId);
       if (!firstCard) return;
 
-      setCards(prev => prev.map(c => c.id === card.id ? { ...c, state: 'selected' } : c));
+      setCards((prev) =>
+        prev.map((c) => (c.id === card.id ? { ...c, state: "selected" } : c)),
+      );
       setIsProcessing(true);
 
       // Check Match
       if (firstCard.matchKey === card.matchKey) {
         // Correct Match
         setTimeout(() => {
-          setCards(prev => prev.map(c => 
-            c.matchKey === card.matchKey ? { ...c, state: 'matched' } : c
-          ));
+          setCards((prev) =>
+            prev.map((c) =>
+              c.matchKey === card.matchKey ? { ...c, state: "matched" } : c,
+            ),
+          );
           playbackService.playSound("correct");
-          TTS.speak("Correct!", { rate: 0.9 });
+          Speech.stop();
+          TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
           setSelectedId(null);
           setIsProcessing(false);
           checkCompletion();
@@ -204,19 +227,28 @@ export default function PracticePronunciation() {
       } else {
         // Incorrect Match
         setTimeout(() => {
-          setCards(prev => prev.map(c => 
-            c.id === firstCard.id || c.id === card.id ? { ...c, state: 'mismatch' } : c
-          ));
+          setCards((prev) =>
+            prev.map((c) =>
+              c.id === firstCard.id || c.id === card.id
+                ? { ...c, state: "mismatch" }
+                : c,
+            ),
+          );
           playbackService.playSound("incorrect");
-          TTS.speak("Try again", { rate: 0.85 });
-          setMistakes(prev => new Set(prev).add(firstCard.matchKey).add(card.matchKey));
+          Speech.stop();
+          TTS.speak("Try again", { rate: 0.85, pitch: 1.1 });
+          setMistakes((prev) =>
+            new Set(prev).add(firstCard.matchKey).add(card.matchKey),
+          );
         }, 500);
 
         // Reset after delay
         setTimeout(() => {
-          setCards(prev => prev.map(c => 
-            c.state === 'mismatch' ? { ...c, state: 'idle' } : c
-          ));
+          setCards((prev) =>
+            prev.map((c) =>
+              c.state === "mismatch" ? { ...c, state: "idle" } : c,
+            ),
+          );
           setSelectedId(null);
           setIsProcessing(false);
         }, 1500);
@@ -225,14 +257,16 @@ export default function PracticePronunciation() {
   };
 
   const checkCompletion = () => {
-    // We need to check if this was the last pair. 
+    // We need to check if this was the last pair.
     // State updates are async, so we count matched cards + 2 (the ones just matched)
     // Actually, safer to rely on an effect or just check count.
     // Let's use a timeout to check the state after update.
     setTimeout(() => {
-      setCards(currentCards => {
-        const matchedCount = currentCards.filter(c => c.state === 'matched').length;
-        if (matchedCount === 20) {
+      setCards((currentCards) => {
+        const matchedCount = currentCards.filter(
+          (c) => c.state === "matched",
+        ).length;
+        if (matchedCount === TOTAL_PAIRS * 2) {
           handleFinish();
         }
         return currentCards;
@@ -241,97 +275,121 @@ export default function PracticePronunciation() {
   };
 
   const handleFinish = async () => {
-    const score = Math.max(0, 10 - mistakes.size);
-    const passed = score >= 6;
-    
+    // Adjust score out of 10 for consistency or out of TOTAL_PAIRS
+    const rawScore = Math.max(0, TOTAL_PAIRS - mistakes.size);
+    const scorePercentage = (rawScore / TOTAL_PAIRS) * 100;
+    const passed = scorePercentage >= 60;
+
     // Save Result
     await addResult({
       activityId: "pronunciation-matching",
       category: "practice",
-      score: score * 10,
+      score: rawScore * (10 / TOTAL_PAIRS) * 10, // Scale to 100
       maxScore: 100,
       completed: true,
     });
 
     setShowResult(true);
-    Speech.speak(passed ? "Awesome! You did it!" : "Good practice! Try again.", { rate: 0.85 });
+    Speech.stop();
+    TTS.speak(passed ? "Awesome! You did it!" : "Good practice! Try again.", {
+      rate: 0.85,
+      pitch: 1.1,
+    });
   };
 
   const handleRestart = () => {
-    setRestartCount(prev => prev + 1);
+    Speech.stop();
+    setRestartCount((prev) => prev + 1);
   };
 
   const handleExit = () => {
-    router.replace('/pract');
+    Speech.stop();
+    router.replace("/pract");
   };
 
   return (
     <LinearGradient colors={["#E0F2F1", "#80CBC4"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" />
-        
+
         {/* Header */}
         <View style={styles.header}>
           <BackButton targetRoute="/pract" color="#00695C" />
-          <InstructionButton onPress={playInstruction} style={{ marginRight: 10 }} />
+          <InstructionButton
+            onPress={playInstruction}
+            style={{ marginRight: 10 }}
+          />
           <Text style={styles.title}>Match Pairs</Text>
           <View style={styles.scoreBadge}>
-             {/* Show matched pairs count */}
-             <Text style={styles.scoreText}>
-               {cards.filter(c => c.state === 'matched').length / 2} / 10
-             </Text>
+            {/* Show matched pairs count */}
+            <Text style={styles.scoreText}>
+              {cards.filter((c) => c.state === "matched").length / 2} /{" "}
+              {TOTAL_PAIRS}
+            </Text>
           </View>
         </View>
 
         <Text style={styles.subtitle}>Tap matched pictures and words!</Text>
 
-        {/* Grid */}
-        <FlatList
-          data={cards}
-          keyExtractor={(item) => item.id}
-          key={numColumns} // Force re-render on column change
-          numColumns={numColumns}
+        <ScrollView
           contentContainerStyle={styles.listContainer}
-          columnWrapperStyle={[styles.columnWrapper, { gap: GAP }]}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.card,
-                { 
-                  width: cardSize,
-                  height: cardSize,
-                  backgroundColor: item.state === 'matched' ? '#E8F5E9' : item.color,
-                  borderColor: item.state === 'selected' ? '#2196F3' : 
-                               item.state === 'mismatch' ? '#F44336' : 
-                               item.state === 'matched' ? '#4CAF50' : 'transparent',
-                  opacity: item.state === 'matched' ? 0.6 : 1,
-                }
-              ]}
-              onPress={() => handleCardPress(item)}
-              activeOpacity={0.8}
-            >
-              {item.type === 'image' && item.imageSource ? (
-                <Image 
-                  source={item.imageSource} 
-                  style={styles.cardImage} 
-                  resizeMode="contain" 
-                />
-              ) : (
-                <Text style={styles.wordText} numberOfLines={1} adjustsFontSizeToFit>
-                  {item.word}
-                </Text>
-              )}
-              
-              {/* Status Indicator (Icon Overlay) */}
-              {item.state === 'matched' && (
-                <View style={styles.statusOverlay}>
-                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-        />
+        >
+          <View style={styles.gridContainer}>
+            {cards.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.card,
+                  {
+                    width: cardSize,
+                    height: cardSize,
+                    backgroundColor:
+                      item.state === "matched" ? "#E8F5E9" : item.color,
+                    borderColor:
+                      item.state === "selected"
+                        ? "#2196F3"
+                        : item.state === "mismatch"
+                          ? "#F44336"
+                          : item.state === "matched"
+                            ? "#4CAF50"
+                            : "transparent",
+                    opacity: item.state === "matched" ? 0.6 : 1,
+                  },
+                ]}
+                onPress={() => handleCardPress(item)}
+                activeOpacity={0.8}
+              >
+                {item.type === "image" && item.imageSource ? (
+                  <Image
+                    source={item.imageSource}
+                    style={styles.cardImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Text
+                    style={styles.wordText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {item.word}
+                  </Text>
+                )}
+
+                {/* Status Indicator (Icon Overlay) */}
+                {item.state === "matched" && (
+                  <View style={styles.statusOverlay}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color="#4CAF50"
+                    />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
 
         {/* Result Modal */}
         <Modal
@@ -343,28 +401,46 @@ export default function PracticePronunciation() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                {(10 - mistakes.size) >= 6 ? "Great Job! 🎉" : "Keep Trying! 💪"}
+                {10 - mistakes.size >= 6 ? "Great Job! 🎉" : "Keep Trying! 💪"}
               </Text>
-              
+
               <View style={styles.resultScoreContainer}>
                 <Text style={styles.resultScoreLabel}>Your Score</Text>
-                <Text style={[
-                  styles.resultScoreValue, 
-                  { color: (10 - mistakes.size) >= 6 ? "#4CAF50" : "#FF9800" }
-                ]}>
+                <Text
+                  style={[
+                    styles.resultScoreValue,
+                    { color: 10 - mistakes.size >= 6 ? "#4CAF50" : "#FF9800" },
+                  ]}
+                >
                   {Math.max(0, 10 - mistakes.size)} / 10
                 </Text>
               </View>
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.tryAgainButton} onPress={handleRestart}>
+                <TouchableOpacity
+                  style={styles.tryAgainButton}
+                  onPress={handleRestart}
+                >
                   <Text style={styles.buttonText}>Try Again</Text>
-                  <Ionicons name="refresh" size={20} color="#FFF" style={{marginLeft: 8}} />
+                  <Ionicons
+                    name="refresh"
+                    size={20}
+                    color="#FFF"
+                    style={{ marginLeft: 8 }}
+                  />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.exitButton} onPress={handleExit}>
+                <TouchableOpacity
+                  style={styles.exitButton}
+                  onPress={handleExit}
+                >
                   <Text style={styles.buttonText}>Exit</Text>
-                  <Ionicons name="exit-outline" size={20} color="#FFF" style={{marginLeft: 8}} />
+                  <Ionicons
+                    name="exit-outline"
+                    size={20}
+                    color="#FFF"
+                    style={{ marginLeft: 8 }}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -383,49 +459,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 10,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#00695C',
+    fontWeight: "bold",
+    color: "#00695C",
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   scoreBadge: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: "rgba(255,255,255,0.5)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
   scoreText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#004D40',
+    fontWeight: "bold",
+    color: "#004D40",
   },
   subtitle: {
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 16,
-    color: '#004D40',
+    color: "#004D40",
     marginBottom: 10,
     opacity: 0.8,
   },
   listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    flexGrow: 1,
+    justifyContent: "center",
   },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: 10,
+  gridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12, // Matches the GAP constant
   },
   card: {
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -435,79 +515,79 @@ const styles = StyleSheet.create({
     padding: 8, // Added padding for images
   },
   cardImage: {
-    width: '85%',
-    height: '85%',
+    width: "85%",
+    height: "85%",
   },
   wordText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
   },
   statusOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 5,
     right: 5,
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: "rgba(255,255,255,0.8)",
     borderRadius: 12,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    width: '85%',
-    backgroundColor: '#FFF',
+    width: "85%",
+    backgroundColor: "#FFF",
     borderRadius: 24,
     padding: 30,
-    alignItems: 'center',
+    alignItems: "center",
     elevation: 5,
   },
   modalTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   resultScoreContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 30,
   },
   resultScoreLabel: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginBottom: 5,
   },
   resultScoreValue: {
     fontSize: 48,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   modalButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 15,
   },
   tryAgainButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   exitButton: {
-    backgroundColor: '#FF5722',
+    backgroundColor: "#FF5722",
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   buttonText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

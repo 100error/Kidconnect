@@ -2,11 +2,21 @@ import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import NounCard, { NounLesson } from "@/components/ui/NounCard";
 import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { TTS } from "@/services/audio/tts";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useState } from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 const nounLessons: NounLesson[] = [
   // Existing Categories
@@ -19,8 +29,8 @@ const nounLessons: NounLesson[] = [
     how: "Lowercase unless starting a sentence.",
     when: "Talking about general things like 'a dog' or 'the park'.",
     examples: ["boy", "lady", "park", "town", "ice cream"],
-    color: "#F3E5F5", 
-    borderColor: "#9C27B0", 
+    color: "#F3E5F5",
+    borderColor: "#9C27B0",
   },
   {
     id: "proper",
@@ -31,8 +41,8 @@ const nounLessons: NounLesson[] = [
     how: "Always capitalized.",
     when: "Naming a specific person (Jason) or place (London).",
     examples: ["Jason", "Maria", "January", "London", "Hawaii"],
-    color: "#E3F2FD", 
-    borderColor: "#2196F3", 
+    color: "#E3F2FD",
+    borderColor: "#2196F3",
   },
   {
     id: "concrete",
@@ -55,8 +65,8 @@ const nounLessons: NounLesson[] = [
     how: "Used as a subject or object.",
     when: "Talking about intangible things like love or time.",
     examples: ["love", "bravery", "happiness", "freedom", "knowledge"],
-    color: "#FCE4EC", 
-    borderColor: "#E91E63", 
+    color: "#FCE4EC",
+    borderColor: "#E91E63",
   },
   {
     id: "collective",
@@ -67,8 +77,8 @@ const nounLessons: NounLesson[] = [
     how: "Can be singular or plural depending on context.",
     when: "Referring to a group as one unit.",
     examples: ["team", "family", "flock", "herd", "bunch"],
-    color: "#E8F5E9", 
-    borderColor: "#4CAF50", 
+    color: "#E8F5E9",
+    borderColor: "#4CAF50",
   },
   {
     id: "countable",
@@ -126,7 +136,13 @@ const nounLessons: NounLesson[] = [
     where: "Anywhere in a sentence.",
     how: "Written as one word, two words, or with a hyphen.",
     when: "Naming specific things like 'toothpaste'.",
-    examples: ["toothpaste", "bedroom", "swimming pool", "son-in-law", "ice cream"],
+    examples: [
+      "toothpaste",
+      "bedroom",
+      "swimming pool",
+      "son-in-law",
+      "ice cream",
+    ],
     color: "#E0F2F1", // Light Teal
     borderColor: "#009688",
   },
@@ -174,12 +190,23 @@ export default function Nouns() {
   const numColumns = isTablet ? 2 : 1;
   const gap = 16;
   const padding = 16;
-  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   const { play: playInstruction } = useInstruction(
     "nouns",
-    "Learn about nouns! Tap a card to learn what each type of noun is."
+    "Learn about nouns! Tap a card to learn what each type of noun is.",
   );
+
+  // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
+  useFocusEffect(
+    useCallback(() => {
+      void musicService.stopAsync();
+      return () => {
+        Speech.stop();
+      };
+    }, []),
+  );
+
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   // Stop speech when leaving the screen
@@ -189,28 +216,43 @@ export default function Nouns() {
         Speech.stop();
         setPlayingId(null);
       };
-    }, [])
+    }, []),
   );
 
   const handlePlay = (lesson: NounLesson) => {
-    // Stop any currently playing speech
-    Speech.stop();
-    setPlayingId(lesson.id);
+    try {
+      // Stop any currently playing speech
+      setPlayingId(lesson.id);
 
-    const textToSpeak = `${lesson.title}. ${lesson.definition}. What: ${lesson.what}. Where: ${lesson.where}. How: ${lesson.how}. When: ${lesson.when}. Examples include: ${lesson.examples.join(", ")}.`;
-    
-    Speech.speak(textToSpeak, { 
-      rate: 0.75, 
-      pitch: 1.1,
-      onDone: () => setPlayingId(null),
-      onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null),
-    });
+      const examplesText = Array.isArray(lesson.examples)
+        ? lesson.examples.join(", ")
+        : "";
+      const textToSpeak = `${lesson.title || ""}. ${lesson.definition || ""}. What: ${lesson.what || ""}. Where: ${lesson.where || ""}. How: ${lesson.how || ""}. When: ${lesson.when || ""}. Examples include: ${examplesText}.`;
+
+      Speech.stop();
+      TTS.speak(textToSpeak, {
+        rate: 0.85,
+        pitch: 1.1,
+        onDone: () => setPlayingId(null),
+        onStopped: () => setPlayingId(null),
+        onError: (error) => {
+          console.warn("TTS Error in Nouns:", error);
+          setPlayingId(null);
+        },
+      });
+    } catch (error) {
+      console.warn("handlePlay error in Nouns:", error);
+      setPlayingId(null);
+    }
   };
 
   const handleStop = () => {
-    Speech.stop();
-    setPlayingId(null);
+    try {
+      Speech.stop();
+      setPlayingId(null);
+    } catch (error) {
+      console.warn("handleStop error in Nouns:", error);
+    }
   };
 
   return (
@@ -221,15 +263,26 @@ export default function Nouns() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.introText}>
           Explore the different types of nouns below!
         </Text>
 
-        <View style={[styles.grid, { flexDirection: "row", flexWrap: "wrap", gap: gap }]}>
+        <View
+          style={[
+            styles.grid,
+            { flexDirection: "row", flexWrap: "wrap", gap: gap },
+          ]}
+        >
           {nounLessons.map((lesson) => (
-            <View key={lesson.id} style={[styles.gridItem, { width: cardWidth, marginBottom: 0 }]}>
-              <NounCard 
+            <View
+              key={lesson.id}
+              style={[styles.gridItem, { width: cardWidth, marginBottom: 0 }]}
+            >
+              <NounCard
                 lesson={lesson}
                 isPlaying={playingId === lesson.id}
                 onPlay={() => handlePlay(lesson)}

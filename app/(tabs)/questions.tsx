@@ -1,11 +1,20 @@
 import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import InstructionButton from "../../components/InstructionButton";
 // Force linter refresh
 import BackButton from "../../components/ui/BackButton";
@@ -38,12 +47,12 @@ export default function Questions() {
   const numColumns = isTablet ? 2 : 1;
   const gap = 12;
   const padding = 20;
-  const cardWidth = (width - (padding * 2) - (gap * (numColumns - 1))) / numColumns;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   // Audio enabled
   const { play: playInstruction } = useInstruction(
     "questions",
-    "Question words help us learn new things! Tap a card to hear the question and answer."
+    "Question words help us learn new things! Tap a card to hear the question and answer.",
   );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
@@ -53,7 +62,7 @@ export default function Questions() {
         Speech.stop();
         setPlayingId(null);
       };
-    }, [])
+    }, []),
   );
 
   const sections: QuestionSection[] = useMemo(
@@ -70,7 +79,7 @@ export default function Questions() {
             usage: "Ask about a person.",
             question: "Who is your teacher?",
             answer: "My teacher is Ms. Smith.",
-            icon: "person"
+            icon: "person",
           },
           {
             id: "q2",
@@ -78,7 +87,7 @@ export default function Questions() {
             usage: "Ask about a thing or action.",
             question: "What are you eating?",
             answer: "I am eating an apple.",
-            icon: "help"
+            icon: "help",
           },
           {
             id: "q3",
@@ -86,7 +95,7 @@ export default function Questions() {
             usage: "Ask about a place.",
             question: "Where is the cat?",
             answer: "The cat is under the bed.",
-            icon: "map"
+            icon: "map",
           },
           {
             id: "q4",
@@ -94,7 +103,7 @@ export default function Questions() {
             usage: "Ask about time.",
             question: "When is lunch?",
             answer: "Lunch is at 12 o'clock.",
-            icon: "time"
+            icon: "time",
           },
           {
             id: "q5",
@@ -102,9 +111,9 @@ export default function Questions() {
             usage: "Ask for a reason.",
             question: "Why are you running?",
             answer: "Because I am late!",
-            icon: "help-circle"
-          }
-        ]
+            icon: "help-circle",
+          },
+        ],
       },
       {
         title: "How & Which",
@@ -118,7 +127,7 @@ export default function Questions() {
             usage: "Ask about the way something happens.",
             question: "How do you go to school?",
             answer: "I go by bus.",
-            icon: "bus"
+            icon: "bus",
           },
           {
             id: "q7",
@@ -126,9 +135,9 @@ export default function Questions() {
             usage: "Ask to choose between things.",
             question: "Which color do you like?",
             answer: "I like the blue one.",
-            icon: "color-palette"
-          }
-        ]
+            icon: "color-palette",
+          },
+        ],
       },
       {
         title: "Asking About Amounts",
@@ -142,7 +151,7 @@ export default function Questions() {
             usage: "For things you can count.",
             question: "How many cookies are left?",
             answer: "There are three cookies.",
-            icon: "grid"
+            icon: "grid",
           },
           {
             id: "q9",
@@ -150,9 +159,9 @@ export default function Questions() {
             usage: "For things you cannot count.",
             question: "How much water do you want?",
             answer: "Just a little, please.",
-            icon: "water"
-          }
-        ]
+            icon: "water",
+          },
+        ],
       },
       {
         title: "Asking Details",
@@ -166,7 +175,7 @@ export default function Questions() {
             usage: "Ask about age.",
             question: "How old are you?",
             answer: "I am seven years old.",
-            icon: "calendar"
+            icon: "calendar",
           },
           {
             id: "q11",
@@ -174,7 +183,7 @@ export default function Questions() {
             usage: "Ask about distance.",
             question: "How far is the park?",
             answer: "It is two miles away.",
-            icon: "navigate"
+            icon: "navigate",
           },
           {
             id: "q12",
@@ -182,9 +191,9 @@ export default function Questions() {
             usage: "Ask about who owns something.",
             question: "Whose toy is this?",
             answer: "It is my brother's toy.",
-            icon: "gift"
-          }
-        ]
+            icon: "gift",
+          },
+        ],
       },
       {
         title: "Yes / No Questions",
@@ -198,7 +207,7 @@ export default function Questions() {
             usage: "Ask about facts or habits.",
             question: "Do you like ice cream?",
             answer: "Yes, I do!",
-            icon: "help"
+            icon: "help",
           },
           {
             id: "yn2",
@@ -206,7 +215,7 @@ export default function Questions() {
             usage: "Ask about descriptions.",
             question: "Is the sky blue?",
             answer: "Yes, it is.",
-            icon: "cloud"
+            icon: "cloud",
           },
           {
             id: "yn3",
@@ -214,7 +223,7 @@ export default function Questions() {
             usage: "Ask about the past.",
             question: "Did you finish your homework?",
             answer: "No, not yet.",
-            icon: "book"
+            icon: "book",
           },
           {
             id: "yn4",
@@ -222,9 +231,9 @@ export default function Questions() {
             usage: "Ask about ability.",
             question: "Can you swim?",
             answer: "Yes, I can swim fast.",
-            icon: "water"
-          }
-        ]
+            icon: "water",
+          },
+        ],
       },
       {
         title: "Polite Questions",
@@ -238,7 +247,7 @@ export default function Questions() {
             usage: "Ask for permission politely.",
             question: "May I have a cookie?",
             answer: "Yes, you may.",
-            icon: "restaurant"
+            icon: "restaurant",
           },
           {
             id: "p2",
@@ -246,7 +255,7 @@ export default function Questions() {
             usage: "Polite request.",
             question: "Could you help me please?",
             answer: "Sure, I can help.",
-            icon: "hand-left"
+            icon: "hand-left",
           },
           {
             id: "p3",
@@ -254,12 +263,12 @@ export default function Questions() {
             usage: "Polite offer or invitation.",
             question: "Would you like to play?",
             answer: "Yes, I would love to!",
-            icon: "happy"
-          }
-        ]
-      }
+            icon: "happy",
+          },
+        ],
+      },
     ],
-    []
+    [],
   );
 
   const practiceItems: PracticeItem[] = useMemo(
@@ -269,23 +278,33 @@ export default function Questions() {
       { text: "Do you like pizza?", kind: "question" },
       { text: "I like pizza.", kind: "statement" },
       { text: "Who is that?", kind: "question" },
-      { text: "That is my friend.", kind: "statement" }
+      { text: "That is my friend.", kind: "statement" },
     ],
-    []
+    [],
   );
 
   const speak = (text: string, id: string) => {
-    Speech.stop();
     setPlayingId(id);
-    Speech.speak(text, {
+    Speech.stop();
+    TTS.speak(text, {
       rate: 0.85,
       pitch: 1.1,
       onDone: () => setPlayingId(null),
       onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null)
+      onError: () => setPlayingId(null),
     });
     Haptics.selectionAsync();
   };
+
+  // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
+  useFocusEffect(
+    useCallback(() => {
+      void musicService.stopAsync();
+      return () => {
+        Speech.stop();
+      };
+    }, []),
+  );
 
   return (
     <LinearGradient colors={["#E1F5FE", "#FFFFFF"]} style={styles.container}>
@@ -295,56 +314,98 @@ export default function Questions() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.introText}>
-          Question words help us learn new things! Tap a card to hear the question and answer.
+          Question words help us learn new things! Tap a card to hear the
+          question and answer.
         </Text>
 
         {sections.map((section, index) => (
           <View key={index} style={styles.sectionContainer}>
-             <View style={[styles.sectionHeader, { borderLeftColor: section.darkColor }]}>
-              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>{section.title}</Text>
+            <View
+              style={[
+                styles.sectionHeader,
+                { borderLeftColor: section.darkColor },
+              ]}
+            >
+              <Text style={[styles.sectionTitle, { color: section.darkColor }]}>
+                {section.title}
+              </Text>
             </View>
             <Text style={styles.sectionDescription}>{section.description}</Text>
 
-            <View style={[styles.cardsContainer, { flexDirection: "row", flexWrap: "wrap", gap }]}>
+            <View
+              style={[
+                styles.cardsContainer,
+                { flexDirection: "row", flexWrap: "wrap", gap },
+              ]}
+            >
               {section.items.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.card, { width: cardWidth }]}
-                  onPress={() => speak(`${item.word}. ${item.usage} ... Question: ${item.question} ... Answer: ${item.answer}`, item.id)}
+                  onPress={() =>
+                    speak(
+                      `${item.word}. ${item.usage} ... Question: ${item.question} ... Answer: ${item.answer}`,
+                      item.id,
+                    )
+                  }
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={playingId === item.id ? [section.color, "#FFFFFF"] : ["#FFFFFF", "#FAFAFA"]}
+                    colors={
+                      playingId === item.id
+                        ? [section.color, "#FFFFFF"]
+                        : ["#FFFFFF", "#FAFAFA"]
+                    }
                     style={styles.cardGradient}
                   >
                     <View style={styles.iconContainer}>
-                        <Ionicons name={item.icon} size={28} color={section.darkColor} />
+                      <Ionicons
+                        name={item.icon}
+                        size={28}
+                        color={section.darkColor}
+                      />
                     </View>
-                    
+
                     <View style={styles.cardContent}>
-                        <View style={styles.headerRow}>
-                            <Text style={styles.word}>{item.word}</Text>
-                            <Text style={styles.usage}>{item.usage}</Text>
+                      <View style={styles.headerRow}>
+                        <Text style={styles.word}>{item.word}</Text>
+                        <Text style={styles.usage}>{item.usage}</Text>
+                      </View>
+
+                      <View style={styles.qaContainer}>
+                        <View style={styles.qaRow}>
+                          <Text
+                            style={[
+                              styles.qaLabel,
+                              { color: section.darkColor },
+                            ]}
+                          >
+                            Q:
+                          </Text>
+                          <Text style={styles.qaText}>{item.question}</Text>
                         </View>
-                        
-                        <View style={styles.qaContainer}>
-                            <View style={styles.qaRow}>
-                                <Text style={[styles.qaLabel, { color: section.darkColor }]}>Q:</Text>
-                                <Text style={styles.qaText}>{item.question}</Text>
-                            </View>
-                            <View style={styles.qaRow}>
-                                <Text style={[styles.qaLabel, { color: "#4CAF50" }]}>A:</Text>
-                                <Text style={styles.qaText}>{item.answer}</Text>
-                            </View>
+                        <View style={styles.qaRow}>
+                          <Text style={[styles.qaLabel, { color: "#4CAF50" }]}>
+                            A:
+                          </Text>
+                          <Text style={styles.qaText}>{item.answer}</Text>
                         </View>
+                      </View>
                     </View>
 
                     {playingId === item.id && (
-                        <View style={styles.playingIndicator}>
-                             <Ionicons name="volume-high" size={20} color={section.darkColor} />
-                        </View>
+                      <View style={styles.playingIndicator}>
+                        <Ionicons
+                          name="volume-high"
+                          size={20}
+                          color={section.darkColor}
+                        />
+                      </View>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
@@ -355,33 +416,47 @@ export default function Questions() {
 
         {/* Practice Section */}
         <View style={styles.practiceSection}>
-             <View style={[styles.sectionHeader, { borderLeftColor: "#607D8B" }]}>
-              <Text style={[styles.sectionTitle, { color: "#455A64" }]}>Question vs Statement</Text>
-            </View>
-            <Text style={styles.sectionDescription}>Can you tell the difference? Tap to listen!</Text>
-            
-            <View style={styles.practiceChips}>
-                {practiceItems.map((item, idx) => (
-                    <TouchableOpacity 
-                        key={idx} 
-                        style={styles.practiceChip}
-                        onPress={() => speak(`${item.text} ... This is a ${item.kind}.`, `p-${idx}`)}
-                    >
-                         <Text style={styles.practiceText}>{item.text}</Text>
-                         <View style={[
-                             styles.kindTag, 
-                             item.kind === "question" ? { backgroundColor: "#E1F5FE" } : { backgroundColor: "#FFF3E0" }
-                         ]}>
-                             <Text style={[
-                                 styles.kindText,
-                                 item.kind === "question" ? { color: "#0288D1" } : { color: "#F57C00" }
-                             ]}>
-                                 {item.kind === "question" ? "?" : "."}
-                             </Text>
-                         </View>
-                    </TouchableOpacity>
-                ))}
-            </View>
+          <View style={[styles.sectionHeader, { borderLeftColor: "#607D8B" }]}>
+            <Text style={[styles.sectionTitle, { color: "#455A64" }]}>
+              Question vs Statement
+            </Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Can you tell the difference? Tap to listen!
+          </Text>
+
+          <View style={styles.practiceChips}>
+            {practiceItems.map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.practiceChip}
+                onPress={() =>
+                  speak(`${item.text} ... This is a ${item.kind}.`, `p-${idx}`)
+                }
+              >
+                <Text style={styles.practiceText}>{item.text}</Text>
+                <View
+                  style={[
+                    styles.kindTag,
+                    item.kind === "question"
+                      ? { backgroundColor: "#E1F5FE" }
+                      : { backgroundColor: "#FFF3E0" },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.kindText,
+                      item.kind === "question"
+                        ? { color: "#0288D1" }
+                        : { color: "#F57C00" },
+                    ]}
+                  >
+                    {item.kind === "question" ? "?" : "."}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         <View style={{ height: 40 }} />
@@ -530,43 +605,43 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   practiceSection: {
-      marginTop: 10,
-      marginBottom: 30,
+    marginTop: 10,
+    marginBottom: 30,
   },
   practiceChips: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
   },
   practiceChip: {
-      backgroundColor: "#FFFFFF",
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: "#ECEFF1",
-      flexDirection: "row",
-      alignItems: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#ECEFF1",
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   practiceText: {
-      fontSize: 15,
-      color: "#37474F",
-      marginRight: 10,
+    fontSize: 15,
+    color: "#37474F",
+    marginRight: 10,
   },
   kindTag: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   kindText: {
-      fontSize: 14,
-      fontWeight: "900",
-  }
+    fontSize: 14,
+    fontWeight: "900",
+  },
 });

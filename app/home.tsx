@@ -2,62 +2,88 @@ import GradientButton from "@/components/GradientButton";
 import KicoMascot from "@/components/KicoMascot";
 import SettingsModal from "@/components/SettingsModal"; // Import Modal
 import TutorialOverlay from "@/components/TutorialOverlay";
-import { musicService } from "@/services/audio/music";
+import { audioService } from "@/services/audio/audioService";
+import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
 import { profileService } from "@/services/profile"; // Import Profile Service
-import { DailyProgress, getCurrent24hProgress, getDailyHistory, subscribeProgress } from "@/services/progress";
-import { settingsService } from "@/services/settings"; // Import Settings Service
+import {
+  DailyProgress,
+  getCurrent24hProgress,
+  getDailyHistory,
+  subscribeProgress,
+} from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { documentDirectory, getInfoAsync, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
+import {
+  documentDirectory,
+  getInfoAsync,
+  readAsStringAsync,
+  writeAsStringAsync,
+} from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, FlatList, ImageBackground, LayoutRectangle, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Dimensions,
+  FlatList,
+  ImageBackground,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import * as Progress from "react-native-progress";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 const TUTORIAL_FILE = `${documentDirectory}tutorial_seen.json`;
 
 const Home = () => {
   const navigation = useNavigation<any>();
-  const lessonRef = useRef<View | null>(null);
-  const progressRef = useRef<View | null>(null);
-  
+  const lessonRef = useRef<View>(null);
+  const progressRef = useRef<View>(null);
+
   const [tutorialVisible, setTutorialVisible] = useState(false);
   const [shouldShowTutorial, setShouldShowTutorial] = useState(false);
-  const [lessonLayout, setLessonLayout] = useState<LayoutRectangle | null>(null);
-  const [progressLayout, setProgressLayout] = useState<LayoutRectangle | null>(null);
+  const [isHomeTutorial, setIsHomeTutorial] = useState(false);
+  const [lessonLayout, setLessonLayout] = useState<
+    { x: number; y: number; width: number; height: number } | undefined
+  >(undefined);
+  const [progressLayout, setProgressLayout] = useState<
+    { x: number; y: number; width: number; height: number } | undefined
+  >(undefined);
 
   const [overallProgress, setOverallProgress] = useState<number>(0);
   const [historyVisible, setHistoryVisible] = useState(false);
   const [historyData, setHistoryData] = useState<DailyProgress[]>([]);
   const [username, setUsername] = useState<string | null>(null);
-  
+
   const [settingsVisible, setSettingsVisible] = useState(false); // Settings Modal State
   const lastEncouragementProgress = useRef(0);
 
   const menuItems = [
-    { 
-      id: "1", 
-      title: "Vocabulary", 
-      screen: "vocab", 
+    {
+      id: "1",
+      title: "Vocabulary",
+      screen: "vocab",
       icon: "book" as const,
-      colors: ["#FFB74D", "#FF8A65"] as const // Orange Gradient
+      colors: ["#FFB74D", "#FF8A65"] as const, // Orange Gradient
     },
-    { 
-      id: "2", 
-      title: "Practice", 
-      screen: "pract", 
+    {
+      id: "2",
+      title: "Practice",
+      screen: "pract",
       icon: "pencil" as const,
-      colors: ["#F06292", "#BA68C8"] as const // Pink/Purple Gradient
+      colors: ["#F06292", "#BA68C8"] as const, // Pink/Purple Gradient
     },
-    { 
-      id: "3", 
-      title: "Games", 
-      screen: "games", 
+    {
+      id: "3",
+      title: "Games",
+      screen: "games",
       icon: "game-controller" as const,
-      colors: ["#4DD0E1", "#4FC3F7"] as const // Blue/Cyan Gradient
+      colors: ["#4DD0E1", "#4FC3F7"] as const, // Blue/Cyan Gradient
     },
   ];
 
@@ -69,46 +95,62 @@ const Home = () => {
     }
   }, [overallProgress]);
 
-  // PLAY BACKGROUND MUSIC with Settings Check
+  // ✅ AUTO-PLAY BACKGROUND MUSIC ON FOCUS
   useFocusEffect(
     useCallback(() => {
-      void musicService.playAsync();
+      void musicService.playAsync(MUSIC_SOURCES.home);
 
       // Check progress on focus (handles 24h reset)
-      getCurrent24hProgress().then(setOverallProgress).catch(() => {});
-      
+      getCurrent24hProgress()
+        .then(setOverallProgress)
+        .catch(() => {});
+
       // Load Profile Name
-      profileService.getProfile().then(p => {
-        if (p?.username) setUsername(p.username);
-      }).catch(() => {});
+      profileService
+        .getProfile()
+        .then((p) => {
+          if (p?.username) setUsername(p.username);
+        })
+        .catch(() => {});
 
       return () => {
-        void musicService.stopAsync();
+        // We don't stop here, because we want music to transition smoothly
+        // musicService.playAsync will handle stopping the previous track
         Speech.stop(); // Stop any narration/TTS
       };
-    }, [])
+    }, []),
   );
 
   useEffect(() => {
     checkTutorial();
     // Load PROGRESS initially
-    getCurrent24hProgress().then(setOverallProgress).catch(() => {});
-    
+    getCurrent24hProgress()
+      .then(setOverallProgress)
+      .catch(() => {});
+
     // Subscribe to updates
     const unsub = subscribeProgress((_id) => {
-      getCurrent24hProgress().then(setOverallProgress).catch(() => {});
+      getCurrent24hProgress()
+        .then(setOverallProgress)
+        .catch(() => {});
     });
 
     // Measure targets once views are laid out
     const measureTargets = () => {
       // Measure lesson buttons container
-      if (lessonRef.current && typeof lessonRef.current.measureInWindow === "function") {
+      if (
+        lessonRef.current &&
+        typeof lessonRef.current.measureInWindow === "function"
+      ) {
         lessonRef.current.measureInWindow((x, y, width, height) => {
           setLessonLayout({ x, y, width, height });
         });
       }
       // Measure progress circle container
-      if (progressRef.current && typeof progressRef.current.measureInWindow === "function") {
+      if (
+        progressRef.current &&
+        typeof progressRef.current.measureInWindow === "function"
+      ) {
         progressRef.current.measureInWindow((x, y, width, height) => {
           setProgressLayout({ x, y, width, height });
         });
@@ -117,7 +159,6 @@ const Home = () => {
     const id = setTimeout(measureTargets, 500);
 
     return () => {
-      void musicService.stopAsync();
       clearTimeout(id);
       unsub();
     };
@@ -127,6 +168,7 @@ const Home = () => {
     try {
       const info = await getInfoAsync(TUTORIAL_FILE);
       if (!info.exists) {
+        setIsHomeTutorial(true);
         setShouldShowTutorial(true);
         return;
       }
@@ -134,9 +176,11 @@ const Home = () => {
         const content = await readAsStringAsync(TUTORIAL_FILE);
         const data = JSON.parse(content || "{}");
         if (!data.seen) {
+          setIsHomeTutorial(true);
           setShouldShowTutorial(true);
         }
       } catch {
+        setIsHomeTutorial(true);
         setShouldShowTutorial(true);
       }
     } catch (e) {
@@ -154,13 +198,9 @@ const Home = () => {
   };
 
   const handleLessonPress = async (item: { screen: string; title: string }) => {
-    // Play TTS and navigate
-    Speech.stop();
-    const soundEnabled = await settingsService.isSoundEnabled();
-    if (soundEnabled) {
-      Speech.speak(item.title, { rate: 1.0, pitch: 1.1 });
-    }
-    
+    // Stop any existing TTS before navigating
+    audioService.speak(item.title);
+
     try {
       navigation.navigate(item.screen);
     } catch (error) {
@@ -169,7 +209,7 @@ const Home = () => {
     }
   };
 
-  const handleProgressPress = async () => { 
+  const handleProgressPress = async () => {
     try {
       const history = await getDailyHistory();
       setHistoryData(history);
@@ -182,29 +222,32 @@ const Home = () => {
   // Defer showing tutorial until key layouts are available, with a fallback timer
   useEffect(() => {
     if (!shouldShowTutorial) return;
+
+    if (isHomeTutorial) {
+      setTutorialVisible(true);
+      return;
+    }
+
     if (lessonLayout || progressLayout) {
       setTutorialVisible(true);
       return;
     }
     const id = setTimeout(() => setTutorialVisible(true), 1500);
     return () => clearTimeout(id);
-  }, [shouldShowTutorial, lessonLayout, progressLayout]);
+  }, [shouldShowTutorial, isHomeTutorial, lessonLayout, progressLayout]);
 
   return (
-    <ImageBackground
-      source={require("@/assets/int.png")}
-      style={styles.bg}
-    >
+    <ImageBackground source={require("@/assets/int.png")} style={styles.bg}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {/* Header Section */}
           <View style={styles.headerContainer}>
             {/* Settings Button - Top Left */}
-            <TouchableOpacity 
-              style={styles.menuButton} 
+            <TouchableOpacity
+              style={styles.menuButton}
               onPress={() => setSettingsVisible(true)}
               activeOpacity={0.8}
             >
@@ -212,13 +255,13 @@ const Home = () => {
             </TouchableOpacity>
 
             {/* Progress Section - Top Right */}
-             <TouchableOpacity 
-               style={styles.progressWrapper} 
-               onPress={handleProgressPress}
-               activeOpacity={0.8}
-               ref={progressRef}
-               onLayout={(event) => setProgressLayout(event.nativeEvent.layout)}
-             >
+            <TouchableOpacity
+              style={styles.progressWrapper}
+              onPress={handleProgressPress}
+              activeOpacity={0.8}
+              ref={progressRef}
+              onLayout={(event) => setProgressLayout(event.nativeEvent.layout)}
+            >
               <Progress.Circle
                 size={70}
                 progress={overallProgress / 100}
@@ -237,9 +280,9 @@ const Home = () => {
           <KicoMascot />
 
           {/* Welcome Title */}
-         
+
           {/* Lesson Buttons */}
-          <View 
+          <View
             style={styles.lessonContainer}
             ref={lessonRef}
             onLayout={(event) => setLessonLayout(event.nativeEvent.layout)}
@@ -255,9 +298,9 @@ const Home = () => {
             ))}
           </View>
 
-          <SettingsModal 
-            visible={settingsVisible} 
-            onClose={() => setSettingsVisible(false)} 
+          <SettingsModal
+            visible={settingsVisible}
+            onClose={() => setSettingsVisible(false)}
           />
 
           <TutorialOverlay
@@ -267,6 +310,7 @@ const Home = () => {
             }}
             lessonLayout={lessonLayout}
             progressLayout={progressLayout}
+            isHomeTutorial={isHomeTutorial}
           />
 
           {/* History Modal */}
@@ -284,11 +328,13 @@ const Home = () => {
                     <Ionicons name="close-circle" size={32} color="#999" />
                   </TouchableOpacity>
                 </View>
-                
+
                 {historyData.length === 0 ? (
-                   <View style={styles.emptyHistory}>
-                     <Text style={styles.emptyText}>Start playing to see your history!</Text>
-                   </View>
+                  <View style={styles.emptyHistory}>
+                    <Text style={styles.emptyText}>
+                      Start playing to see your history!
+                    </Text>
+                  </View>
                 ) : (
                   <FlatList
                     data={historyData}
@@ -297,12 +343,23 @@ const Home = () => {
                     renderItem={({ item }) => (
                       <View style={styles.historyItem}>
                         <View style={styles.dateContainer}>
-                          <Ionicons name="calendar-outline" size={20} color="#4AC3FF" />
+                          <Ionicons
+                            name="calendar-outline"
+                            size={20}
+                            color="#4AC3FF"
+                          />
                           <Text style={styles.historyDate}>{item.date}</Text>
                         </View>
                         <View style={styles.scoreContainer}>
-                           <View style={[styles.progressBar, { width: `${Math.min(item.percent, 100)}%` }]} />
-                           <Text style={styles.historyScore}>{item.percent}%</Text>
+                          <View
+                            style={[
+                              styles.progressBar,
+                              { width: `${Math.min(item.percent, 100)}%` },
+                            ]}
+                          />
+                          <Text style={styles.historyScore}>
+                            {item.percent}%
+                          </Text>
                         </View>
                       </View>
                     )}
@@ -331,24 +388,24 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 20,
     marginBottom: 10,
-    height: 95, 
+    height: 95,
   },
   menuButton: {
     padding: 10,
-    backgroundColor: 'rgba(205, 222, 222, 0.2)',
-    color: 'rgba(16, 93, 93, 0.2)',
+    backgroundColor: "rgba(205, 222, 222, 0.2)",
+    color: "rgba(16, 93, 93, 0.2)",
     borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   progressWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+    backgroundColor: "rgba(255, 255, 255, 0.24)",
     borderRadius: 50,
     padding: 5,
   },
@@ -375,83 +432,83 @@ const styles = StyleSheet.create({
   progressContainer: {
     // Legacy style removed to prevent overlap
   },
-  
+
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    backgroundColor: '#eef7f9',
+    width: "90%",
+    maxHeight: "80%",
+    backgroundColor: "#eef7f9",
     borderRadius: 25,
     padding: 20,
     elevation: 5,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: "#eee",
     paddingBottom: 10,
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
   historyList: {
     paddingBottom: 20,
   },
   historyItem: {
     marginBottom: 15,
-    backgroundColor: '#b0e9f3c2',
+    backgroundColor: "#b0e9f3c2",
     padding: 15,
     borderRadius: 15,
   },
   dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 8,
   },
   historyDate: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#555',
+    fontWeight: "600",
+    color: "#555",
     marginLeft: 8,
   },
   scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 20,
-    backgroundColor: '#ffffffc2',
+    backgroundColor: "#ffffffc2",
     borderRadius: 10,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   progressBar: {
-    height: '100%',
-    backgroundColor: '#91daff',
+    height: "100%",
+    backgroundColor: "#91daff",
   },
   historyScore: {
-    position: 'absolute',
+    position: "absolute",
     right: 10,
     fontSize: 12,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
   emptyHistory: {
-    alignItems: 'center',
+    alignItems: "center",
     padding: 30,
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
+    color: "#999",
+    textAlign: "center",
   },
 });
 

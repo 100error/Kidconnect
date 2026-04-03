@@ -2,38 +2,81 @@ import GameWordCard from "@/components/game/GameWordCard";
 import InstructionButton from "@/components/InstructionButton";
 import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
-import { useInstruction } from '@/hooks/useInstruction';
+import { useInstruction } from "@/hooks/useInstruction";
 import { addResult } from "@/services/progress";
 import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useCallback, useMemo, useState } from "react";
-import { FlatList, Modal, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import {
+  FlatList,
+  Modal,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 /* ---------------- GAME DATA ---------------- */
 
-const GAME_WORDS: { word: string; image: any }[] = [ 
-  { word: "Apple", image: require("@/assets/gamepronounce/apple.png") },
-  { word: "Baby", image: require("@/assets/gamepronounce/baby.png") },
-  { word: "Ball", image: require("@/assets/gamepronounce/ball.png") },
-  { word: "Book", image: require("@/assets/gamepronounce/book.png") }, 
-  { word: "Car", image: require("@/assets/gamepronounce/car.png") },
-  { word: "Cat", image: require("@/assets/gamepronounce/cat.png") },
-  { word: "Dog", image: require("@/assets/gamepronounce/dog.png") },
-  { word: "Happy", image: require("@/assets/gamepronounce/happy.png") },
-  { word: "House", image: require("@/assets/gamepronounce/house.png") },
-  { word: "Ice Cream", image: require("@/assets/gamepronounce/icecream.png") },
-  { word: "Jump", image: require("@/assets/gamepronounce/jump.png") },
-  { word: "Pizza", image: require("@/assets/gamepronounce/pizza.png") },
-  { word: "Run", image: require("@/assets/gamepronounce/run.png") },
-  { word: "Sad", image: require("@/assets/gamepronounce/sad.png") },
-  { word: "Sleep", image: require("@/assets/gamepronounce/sleep.png") },
-  { word: "Star", image: require("@/assets/gamepronounce/star.png") },
-  { word: "Sun", image: require("@/assets/gamepronounce/sun.png") },
-  { word: "Tree", image: require("@/assets/gamepronounce/tree.png") },
-  { word: "Water", image: require("@/assets/gamepronounce/water.png") },
-  { word: "Flowers", image: require("@/assets/gamepronounce/flowers.png") },
+const GAME_WORDS: { word: string; image: any }[] = [
+  { word: "Aisle", image: require("@/assets/gamepronounce/aisle.png") },
+  { word: "Autumn", image: require("@/assets/gamepronounce/autumn.png") },
+  { word: "Ballet", image: require("@/assets/gamepronounce/ballet.png") },
+  { word: "Beautiful", image: require("@/assets/gamepronounce/beautiful.png") },
+  { word: "Calm", image: require("@/assets/gamepronounce/calm.png") },
+  { word: "Castle", image: require("@/assets/gamepronounce/castle.png") },
+  { word: "Chauffeur", image: require("@/assets/gamepronounce/chauffeur.png") },
+  { word: "Choir", image: require("@/assets/gamepronounce/choir.png") },
+  { word: "Climb", image: require("@/assets/gamepronounce/climb.png") },
+  { word: "Comb", image: require("@/assets/gamepronounce/comb.png") },
+  { word: "Cough", image: require("@/assets/gamepronounce/cough.png") },
+  { word: "Croissant", image: require("@/assets/gamepronounce/croissant.png") },
+  { word: "Daughter", image: require("@/assets/gamepronounce/daughter.png") },
+  { word: "Exhaust", image: require("@/assets/gamepronounce/exhaust.png") },
+  { word: "Gnome", image: require("@/assets/gamepronounce/gnome.png") },
+  { word: "Guide", image: require("@/assets/gamepronounce/guide.png") },
+  { word: "Guitar", image: require("@/assets/gamepronounce/guitar.png") },
+  {
+    word: "Handkerchief",
+    image: require("@/assets/gamepronounce/handkerchief.png"),
+  },
+  { word: "Height", image: require("@/assets/gamepronounce/height.png") },
+  { word: "Hymns", image: require("@/assets/gamepronounce/hymns.png") },
+  { word: "Island", image: require("@/assets/gamepronounce/island.png") },
+  { word: "Knee", image: require("@/assets/gamepronounce/knee.png") },
+  { word: "Knife", image: require("@/assets/gamepronounce/knife.png") },
+  { word: "Knight", image: require("@/assets/gamepronounce/knight.png") },
+  { word: "Knock", image: require("@/assets/gamepronounce/knock.png") },
+  { word: "Laugh", image: require("@/assets/gamepronounce/laugh.png") },
+  { word: "Listen", image: require("@/assets/gamepronounce/listen.png") },
+  {
+    word: "Matchstick",
+    image: require("@/assets/gamepronounce/matchstick.png"),
+  },
+  { word: "Muscle", image: require("@/assets/gamepronounce/muscle.png") },
+  {
+    word: "Psychology",
+    image: require("@/assets/gamepronounce/psychology.png"),
+  },
+  { word: "Queue", image: require("@/assets/gamepronounce/queue.png") },
+  { word: "Receipt", image: require("@/assets/gamepronounce/receipt.png") },
+  { word: "Rhythm", image: require("@/assets/gamepronounce/rhythm.png") },
+  { word: "Scissor", image: require("@/assets/gamepronounce/scissor.png") },
+  {
+    word: "Silhouette",
+    image: require("@/assets/gamepronounce/silhouette.png"),
+  },
+  { word: "Walk", image: require("@/assets/gamepronounce/walk.png") },
+  { word: "Wheat", image: require("@/assets/gamepronounce/wheat.png") },
+  { word: "Wrap", image: require("@/assets/gamepronounce/wrap.png") },
+  { word: "Wrist", image: require("@/assets/gamepronounce/wrist.png") },
+  { word: "Yacht", image: require("@/assets/gamepronounce/yacht.png") },
 ];
 
 export default function GamePronunciation() {
@@ -49,26 +92,33 @@ export default function GamePronunciation() {
   const numColumns = isTablet ? 4 : 2;
   const GAP = 16;
   const PADDING = 16;
-  const itemWidth = (width - (PADDING * 2) - (GAP * (numColumns - 1))) / numColumns;
+  const itemWidth = (width - PADDING * 2 - GAP * (numColumns - 1)) / numColumns;
 
   /* ---------------- INSTRUCTIONS ---------------- */
 
   const { play: playInstruction } = useInstruction(
     "pronunciation-game",
-    "Tap the microphone and say the word shown on the card."
+    "Tap the microphone and say the word shown on the card.",
   );
 
   useFocusEffect(
     useCallback(() => {
       return () => Speech.stop();
-    }, [])
+    }, []),
   );
 
   /* ---------------- GAME WORDS ---------------- */
 
   const gameItems = useMemo(() => {
-    const shuffled = [...GAME_WORDS].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 10);
+    // Fisher-Yates shuffle algorithm for proper randomization
+    const shuffledPool = [...GAME_WORDS];
+    for (let i = shuffledPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledPool[i], shuffledPool[j]] = [shuffledPool[j], shuffledPool[i]];
+    }
+
+    // Select 10 unique words from the shuffled pool
+    return shuffledPool.slice(0, 10);
   }, [restartCount]);
 
   /* ---------------- RESULT HANDLERS ---------------- */
@@ -105,7 +155,7 @@ export default function GamePronunciation() {
   };
 
   const handleFailure = (word: string) => {
-    setMistakes(prev => new Set(prev).add(word));
+    setMistakes((prev) => new Set(prev).add(word));
   };
 
   const handleRestart = () => {
@@ -113,7 +163,7 @@ export default function GamePronunciation() {
     setCompletedWords([]);
     setMistakes(new Set());
     setShowResult(false);
-    setRestartCount(c => c + 1);
+    setRestartCount((c) => c + 1);
   };
 
   const handleExit = () => {
@@ -135,9 +185,7 @@ export default function GamePronunciation() {
             <Text style={styles.title}>Speak It!</Text>
           </View>
 
-          <Text style={styles.subtitle}>
-            Tap the mic and say the word
-          </Text>
+          <Text style={styles.subtitle}>Tap the mic and say the word</Text>
 
           <FlatList
             data={gameItems}
@@ -149,22 +197,25 @@ export default function GamePronunciation() {
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
               <GameWordCard
-                  word={item.word}
-                  image={item.image}
-                  disabled={completedWords.includes(item.word)}
-                  color={
-                    completedWords.includes(item.word) ? "#E8F5E9" : "#FFF"
-                  }
-                  style={{ width: itemWidth, margin: 0 }}
-                  onSuccess={() => handleSuccess(item.word)}
-                  onFailure={() => handleFailure(item.word)}
-                />
+                word={item.word}
+                image={item.image}
+                disabled={completedWords.includes(item.word)}
+                color={completedWords.includes(item.word) ? "#E8F5E9" : "#FFF"}
+                style={{ width: itemWidth, margin: 0 }}
+                onSuccess={() => handleSuccess(item.word)}
+                onFailure={() => handleFailure(item.word)}
+              />
             )}
           />
 
           {/* ---------------- RESULT MODAL ---------------- */}
 
-          <Modal visible={showResult} transparent animationType="fade" onRequestClose={handleExit}>
+          <Modal
+            visible={showResult}
+            transparent
+            animationType="fade"
+            onRequestClose={handleExit}
+          >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Game Complete!</Text>

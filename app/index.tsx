@@ -1,3 +1,4 @@
+import { audioService } from "@/services/audio/audioService";
 import { Audio } from "expo-av";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -19,13 +20,12 @@ export default function Index() {
       const hasSeenWelcomePromise = settingsService.hasSeenWelcome();
 
       try {
-        const { sound: bgSound } = await Audio.Sound.createAsync(
-          require("../assets/music/fun.mp3"),
-          { shouldPlay: true, isLooping: true }
-        );
-        await bgSound.playAsync();
-        setSound(bgSound);
-        soundInstance = bgSound;
+        const bgSound = await audioService.playSound(require("../assets/music/fun.mp3"));
+        if (bgSound) {
+          await bgSound.setIsLoopingAsync(true);
+          setSound(bgSound);
+          soundInstance = bgSound;
+        }
       } catch (e) {
         console.log("Error loading sound", e);
       }

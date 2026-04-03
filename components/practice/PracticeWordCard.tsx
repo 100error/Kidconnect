@@ -1,5 +1,6 @@
 import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
+import * as Speech from "expo-speech";
 import { StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from "react-native";
 
 interface PracticeWordCardProps {
@@ -23,7 +24,8 @@ export default function PracticeWordCard({
     if (onPress) {
       onPress();
     } else {
-      TTS.speak(word);
+      Speech.stop();
+      TTS.speak(word, { rate: 0.85, pitch: 1.1 });
     }
   };
 

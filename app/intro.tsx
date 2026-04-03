@@ -2,8 +2,15 @@ import { Audio, ResizeMode, Video } from "expo-av";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ImageBackground,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
+import { audioService } from "@/services/audio/audioService";
 import { settingsService } from "@/services/settings";
 
 export default function Intro() {
@@ -14,11 +21,27 @@ export default function Intro() {
 
   // Subtitle lines with start/end times (ms)
   const subtitles = [
-    { text: "Hi, friends! I’m Kico, your buddy here at KidConnect!", start: 0, end: 4000 },
+    {
+      text: "Hi, friends! I’m Kico, your buddy here at KidConnect!",
+      start: 0,
+      end: 4000,
+    },
     { text: "Welcome to our fun learning adventure!", start: 4000, end: 7000 },
-    { text: "Here in KidConnect, we play games, learn new things,", start: 7000, end: 12000 },
-    { text: "and have lots of fun while practicing reading, speaking, and understanding!", start: 1200, end: 17000 },
-    { text: "Are you ready? Let’s start our adventure and have fun learning together!", start: 17000, end: 22000 },
+    {
+      text: "Here in KidConnect, we play games, learn new things,",
+      start: 7000,
+      end: 12000,
+    },
+    {
+      text: "and have lots of fun while practicing reading, speaking, and understanding!",
+      start: 12000,
+      end: 17000,
+    },
+    {
+      text: "Are you ready? Let’s start our adventure and have fun learning together!",
+      start: 17000,
+      end: 22000,
+    },
   ];
 
   useEffect(() => {
@@ -26,32 +49,37 @@ export default function Intro() {
 
     async function playVoice() {
       try {
-        const { sound } = await Audio.Sound.createAsync(
-          require("../assets/audio/kiko2.mp3")
+        const sound = await audioService.playSound(
+          require("../assets/audio/kiko2.mp3"),
         );
-        setAudio(sound);
-        soundInstance = sound;
+        if (sound) {
+          setAudio(sound);
+          soundInstance = sound;
 
-        // Playback status listener
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded) {
-            if (status.didJustFinish) {
-              // Clear subtitle and show button when audio ends
-              setCurrentSubtitle("");
-              setShowButton(true);
-            } else if (status.positionMillis != null && !status.didJustFinish) {
-              // Update current subtitle while playing
-              const subtitle = subtitles.find(
-                (s) =>
-                  status.positionMillis >= s.start &&
-                  status.positionMillis <= s.end
-              );
-              setCurrentSubtitle(subtitle ? subtitle.text : "");
+          // Playback status listener
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded) {
+              if (status.didJustFinish) {
+                // Clear subtitle and show button when audio ends
+                setCurrentSubtitle("");
+                setShowButton(true);
+              } else if (
+                status.positionMillis != null &&
+                !status.didJustFinish
+              ) {
+                // Update current subtitle while playing
+                const subtitle = subtitles.find(
+                  (s) =>
+                    status.positionMillis >= s.start &&
+                    status.positionMillis <= s.end,
+                );
+                setCurrentSubtitle(subtitle ? subtitle.text : "");
+              }
             }
-          }
-        });
-
-        await sound.playAsync();
+          });
+        } else {
+          setShowButton(true); // fallback if muted
+        }
       } catch (error) {
         console.log("Error playing audio:", error);
         setShowButton(true); // fallback
@@ -97,12 +125,18 @@ export default function Intro() {
       </View>
       {/* Full screen Kico */}
       <Video
-        ref={videoRef} 
+        ref={videoRef}
         source={require("../assets/videos/kik.mp4")}
-        style={StyleSheet.absoluteFillObject}
+        style={styles.video}
         resizeMode={ResizeMode.COVER}
         shouldPlay
         isLooping
+        useNativeControls={false}
+        onError={(error) => console.log("Video Error:", error)}
+        onLoad={() => console.log("Video Loaded")}
+        usePoster
+        posterSource={require("@/assets/in.png")}
+        posterStyle={{ resizeMode: "cover" }}
       />
 
       {/* Subtitle */}
@@ -128,6 +162,10 @@ export default function Intro() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#A1CEDC" },
+  video: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
   subtitleContainer: {
     position: "absolute",
     bottom: 150,
@@ -152,7 +190,6 @@ const styles = StyleSheet.create({
     bottom: 175,
     width: "100%",
     alignItems: "center",
-  
   },
   button: {
     backgroundColor: "#4AC3FF",

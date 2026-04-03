@@ -2,12 +2,22 @@ import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
 import { useInstruction } from "@/hooks/useInstruction";
+import { musicService } from "@/services/audio/music";
+import { TTS } from "@/services/audio/tts";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useState } from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 /* ================= TYPES ================= */
 
@@ -64,7 +74,11 @@ export const vowelSections: VowelSection[] = [
       { word: "At", example: "We are at school.", icon: "school" },
       { word: "To", example: "I walk to the park.", icon: "walk" },
       { word: "From", example: "This gift is from mom.", icon: "gift" },
-      { word: "With", example: "I play with my toys.", icon: "game-controller" },
+      {
+        word: "With",
+        example: "I play with my toys.",
+        icon: "game-controller",
+      },
     ],
     color: "#E0F2F1", // Light Teal
     darkColor: "#00897B",
@@ -73,11 +87,27 @@ export const vowelSections: VowelSection[] = [
     title: "🔗 Conjunctions",
     description: "Words that connect ideas.",
     examples: [
-      { word: "And", example: "I like apples and bananas.", icon: "add-circle" },
-      { word: "But", example: "I am tired but happy.", icon: "swap-horizontal" },
+      {
+        word: "And",
+        example: "I like apples and bananas.",
+        icon: "add-circle",
+      },
+      {
+        word: "But",
+        example: "I am tired but happy.",
+        icon: "swap-horizontal",
+      },
       { word: "Or", example: "Do you want tea or milk?", icon: "help-circle" },
-      { word: "So", example: "It was raining so I stayed inside.", icon: "umbrella" },
-      { word: "Because", example: "I smile because I am happy.", icon: "happy" },
+      {
+        word: "So",
+        example: "It was raining so I stayed inside.",
+        icon: "umbrella",
+      },
+      {
+        word: "Because",
+        example: "I smile because I am happy.",
+        icon: "happy",
+      },
     ],
     color: "#FFF3E0", // Light Orange
     darkColor: "#FB8C00",
@@ -134,7 +164,11 @@ export const vowelSections: VowelSection[] = [
     title: "� Social Words",
     description: "Polite words we say to others.",
     examples: [
-      { word: "Hello", example: "Hello! Nice to meet you.", icon: "hand-right" },
+      {
+        word: "Hello",
+        example: "Hello! Nice to meet you.",
+        icon: "hand-right",
+      },
       { word: "Goodbye", example: "Goodbye! See you later.", icon: "exit" },
       { word: "Please", example: "Please help me.", icon: "heart-circle" },
       { word: "Thank You", example: "Thank you for the gift.", icon: "gift" },
@@ -151,8 +185,16 @@ export const vowelSections: VowelSection[] = [
     description: "Long A (ā) like in Rain",
     examples: [
       { word: "Rain", example: "It started to rain outside.", icon: "rainy" },
-      { word: "Train", example: "We rode the train to the city.", icon: "train" },
-      { word: "Paint", example: "Let’s paint the wall blue.", icon: "color-palette" },
+      {
+        word: "Train",
+        example: "We rode the train to the city.",
+        icon: "train",
+      },
+      {
+        word: "Paint",
+        example: "Let’s paint the wall blue.",
+        icon: "color-palette",
+      },
       { word: "Snail", example: "The snail moved slowly.", icon: "bug" },
     ],
     color: "#FFF9C4",
@@ -163,8 +205,16 @@ export const vowelSections: VowelSection[] = [
     description: "Long E (ē) like in Eat",
     examples: [
       { word: "Eat", example: "We eat lunch at noon.", icon: "restaurant" },
-      { word: "Seat", example: "Please take a seat.", icon: "caret-down-circle" },
-      { word: "Bread", example: "I like butter on my bread.", icon: "nutrition" },
+      {
+        word: "Seat",
+        example: "Please take a seat.",
+        icon: "caret-down-circle",
+      },
+      {
+        word: "Bread",
+        example: "I like butter on my bread.",
+        icon: "nutrition",
+      },
       { word: "Head", example: "Put a hat on your head.", icon: "happy" },
     ],
     color: "#BBDEFB",
@@ -213,34 +263,48 @@ export default function Common() {
 
   // Instructions
   const { play: playInstruction } = useInstruction(
-    'common',
-    "Learn common words! Tap a section to see examples and hear them spoken."
+    "common",
+    "Learn common words! Tap a section to see examples and hear them spoken.",
   );
 
+  // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
+      void musicService.stopAsync();
       return () => {
         Speech.stop();
         setPlayingId(null);
       };
-    }, [])
+    }, []),
   );
 
   const handlePlay = (id: string, text: string) => {
-    Speech.stop();
-    setPlayingId(id);
-    Speech.speak(text, {
-      rate: 0.75,
-      pitch: 1.1,
-      onDone: () => setPlayingId(null),
-      onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null),
-    });
+    try {
+      setPlayingId(id);
+      Speech.stop();
+      TTS.speak(text, {
+        rate: 0.85,
+        pitch: 1.1,
+        onDone: () => setPlayingId(null),
+        onStopped: () => setPlayingId(null),
+        onError: (error) => {
+          console.warn("TTS Error in Common:", error);
+          setPlayingId(null);
+        },
+      });
+    } catch (error) {
+      console.warn("handlePlay error in Common:", error);
+      setPlayingId(null);
+    }
   };
 
   const handleStop = () => {
-    Speech.stop();
-    setPlayingId(null);
+    try {
+      Speech.stop();
+      setPlayingId(null);
+    } catch (error) {
+      console.warn("handleStop error in Common:", error);
+    }
   };
 
   const commonWordsExplanation = {
@@ -251,13 +315,14 @@ export default function Common() {
   };
 
   const handleMainExplanationPlay = () => {
-      if (playingId === "main_explanation") {
-          handleStop();
-          return;
-      }
-      handlePlay("main_explanation", 
-        `Common Words. What: ${commonWordsExplanation.what}. Where: ${commonWordsExplanation.where}. How: ${commonWordsExplanation.how}. When: ${commonWordsExplanation.when}.`
-      );
+    if (playingId === "main_explanation") {
+      handleStop();
+      return;
+    }
+    handlePlay(
+      "main_explanation",
+      `Common Words. What: ${commonWordsExplanation.what}. Where: ${commonWordsExplanation.where}. How: ${commonWordsExplanation.how}. When: ${commonWordsExplanation.when}.`,
+    );
   };
 
   return (
@@ -268,63 +333,117 @@ export default function Common() {
         <InstructionButton onPress={playInstruction} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Main Explanation Section */}
         <View style={styles.mainExplanationCard}>
-             <View style={styles.mainHeader}>
-                <Text style={styles.mainTitle}>About Common Words</Text>
-                <TouchableOpacity onPress={handleMainExplanationPlay}>
-                    <Ionicons name={playingId === "main_explanation" ? "stop-circle" : "volume-high"} size={32} color="#E91E63" />
-                </TouchableOpacity>
-             </View>
-             <ExplanationView 
-                what={commonWordsExplanation.what}
-                where={commonWordsExplanation.where}
-                how={commonWordsExplanation.how}
-                when={commonWordsExplanation.when}
-                darkColor="#E91E63"
-             />
+          <View style={styles.mainHeader}>
+            <Text style={styles.mainTitle}>About Common Words</Text>
+            <TouchableOpacity onPress={handleMainExplanationPlay}>
+              <Ionicons
+                name={
+                  playingId === "main_explanation"
+                    ? "stop-circle"
+                    : "volume-high"
+                }
+                size={32}
+                color="#E91E63"
+              />
+            </TouchableOpacity>
+          </View>
+          <ExplanationView
+            what={commonWordsExplanation.what}
+            where={commonWordsExplanation.where}
+            how={commonWordsExplanation.how}
+            when={commonWordsExplanation.when}
+            darkColor="#E91E63"
+          />
         </View>
 
         <Text style={styles.sectionHeader}>Common Word Patterns</Text>
 
         {vowelSections.map((section, index) => (
-          <View key={index} style={[styles.card, { backgroundColor: section.color, borderColor: section.darkColor }]}>
-            <View style={[styles.cardHeader, { backgroundColor: section.darkColor }]}>
+          <View
+            key={index}
+            style={[
+              styles.card,
+              {
+                backgroundColor: section.color,
+                borderColor: section.darkColor,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.cardHeader,
+                { backgroundColor: section.darkColor },
+              ]}
+            >
               <Text style={styles.cardTitle}>{section.title}</Text>
               <Text style={styles.cardDescription}>{section.description}</Text>
               <TouchableOpacity
-                 onPress={() => {
-                    if (playingId === section.title) {
-                        handleStop();
-                    } else {
-                        const words = section.examples.map(e => e.word).join(", ");
-                        handlePlay(section.title, `${section.title}. ${section.description}. Words like: ${words}.`);
-                    }
-                 }}
+                onPress={() => {
+                  if (playingId === section.title) {
+                    handleStop();
+                  } else {
+                    const words = section.examples
+                      .map((e) => e.word)
+                      .join(", ");
+                    handlePlay(
+                      section.title,
+                      `${section.title}. ${section.description}. Words like: ${words}.`,
+                    );
+                  }
+                }}
               >
-                  <Ionicons name={playingId === section.title ? "stop-circle" : "volume-medium"} size={24} color="white" />
+                <Ionicons
+                  name={
+                    playingId === section.title
+                      ? "stop-circle"
+                      : "volume-medium"
+                  }
+                  size={24}
+                  color="white"
+                />
               </TouchableOpacity>
             </View>
 
             <View style={styles.examplesGrid}>
               {section.examples.map((item, idx) => (
-                <TouchableOpacity 
-                    key={idx} 
-                    style={styles.exampleItem}
-                    onPress={() => {
-                        if (playingId === item.word) {
-                            handleStop();
-                        } else {
-                            handlePlay(item.word, `${item.word}. ${item.example}`);
-                        }
-                    }}
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.exampleItem}
+                  onPress={() => {
+                    if (playingId === item.word) {
+                      handleStop();
+                    } else {
+                      handlePlay(item.word, `${item.word}. ${item.example}`);
+                    }
+                  }}
                 >
-                  <View style={[styles.iconContainer, { backgroundColor: section.darkColor }]}>
-                     <Ionicons name={item.icon || "star"} size={20} color="white" />
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: section.darkColor },
+                    ]}
+                  >
+                    <Ionicons
+                      name={item.icon || "star"}
+                      size={20}
+                      color="white"
+                    />
                   </View>
                   <View style={styles.textContainer}>
-                    <Text style={[styles.wordText, playingId === item.word && styles.highlight]}>{item.word}</Text>
+                    <Text
+                      style={[
+                        styles.wordText,
+                        playingId === item.word && styles.highlight,
+                      ]}
+                    >
+                      {item.word}
+                    </Text>
                     <Text style={styles.exampleText}>{item.example}</Text>
                   </View>
                 </TouchableOpacity>
@@ -359,33 +478,33 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   mainExplanationCard: {
-      backgroundColor: "white",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 24,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   mainHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
   },
   mainTitle: {
-      fontSize: 20,
-      fontWeight: "bold",
-      color: "#E91E63",
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#E91E63",
   },
   sectionHeader: {
-      fontSize: 18,
-      fontWeight: "bold",
-      color: "#555",
-      marginBottom: 12,
-      marginLeft: 4,
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#555",
+    marginBottom: 12,
+    marginLeft: 4,
   },
   card: {
     borderRadius: 16,

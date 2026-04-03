@@ -4,6 +4,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import * as Speech from "expo-speech";
 import { useEffect } from "react";
 import { Audio } from "expo-av";
+import { AuthProvider } from "@/context/AuthContext";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -24,18 +25,20 @@ export default function RootLayout() {
   }, [pathname]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="greeting" />
-        <Stack.Screen name="intro" />
-        <Stack.Screen name="home" />
-        <Stack.Screen name="vocab" />
-        <Stack.Screen name="pract" />
-        <Stack.Screen name="games" />
-        {/*---------TABS------------*/}
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="greeting" />
+          <Stack.Screen name="intro" />
+          <Stack.Screen name="home" />
+          <Stack.Screen name="vocab" />
+          <Stack.Screen name="pract" />
+          <Stack.Screen name="games" />
+          {/*---------TABS------------*/}
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }

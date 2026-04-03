@@ -1,90 +1,109 @@
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/ui/BackButton";
-import { musicService } from "@/services/audio/music";
-import { Audio } from "expo-av";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { audioService } from "@/services/audio/audioService";
+import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useCallback } from "react";
-import { FlatList, ImageBackground, Platform, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  ImageBackground,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 const lessons = [
-  { 
-    id: "1", 
-    title: "Match Pairs", 
-    screen: "/(tabs)/practice/pronunciation", 
+  {
+    id: "1",
+    title: "Match Pairs",
+    screen: "/(tabs)/practice/pronunciation",
     icon: "mic" as const,
-    colors: ["#66BB6A", "#81C784"] as const 
+    colors: ["#66BB6A", "#81C784"] as const,
   },
-  { 
-    id: "2", 
-    title: "Sentence Builder", 
-    screen: "/(tabs)/sentencebuild", 
-    icon: "construct" as const, 
-    colors: ["#29B6F6", "#4FC3F7"] as const 
+  {
+    id: "2",
+    title: "Sentence Builder",
+    screen: "/(tabs)/sentencebuild",
+    icon: "construct" as const,
+    colors: ["#29B6F6", "#4FC3F7"] as const,
   },
-  { 
-    id: "3", 
-    title: "Fix the Sentence", 
-    screen: "/(tabs)/fixsentence", 
+  {
+    id: "3",
+    title: "Fix the Sentence",
+    screen: "/(tabs)/fixsentence",
     icon: "build" as const,
-    colors: ["#AB47BC", "#BA68C8"] as const 
+    colors: ["#AB47BC", "#BA68C8"] as const,
   },
-  { 
-    id: "4", 
-    title: "Present Simple Tense", 
-    screen: "/(tabs)/presentsimpletense", 
+  {
+    id: "4",
+    title: "Present Simple Tense",
+    screen: "/(tabs)/presentsimpletense",
     icon: "time" as const,
-    colors: ["#FFB74D", "#FF9800"] as const 
+    colors: ["#FFB74D", "#FF9800"] as const,
   },
-  { 
-    id: "5", 
-    title: "Riddles", 
-    screen: "/(tabs)/riddles", 
+  {
+    id: "5",
+    title: "Riddles",
+    screen: "/(tabs)/riddles",
     icon: "help-circle" as const,
-    colors: ["#FF8A65", "#F06292"] as const 
+    colors: ["#FF8A65", "#F06292"] as const,
   },
 ];
 
 export default function Pract() {
   const router = useRouter();
+  const { AuthGuard } = useRequireAuth();
 
   // ✅ PLAY CLICK SOUND THEN NAVIGATE
   const playAndNavigate = async (screen: string) => {
     try {
       await musicService.stopAsync();
 
-      const { sound } = await Audio.Sound.createAsync(
-        require("../assets/music/drop.mp3")
+      const sound = await audioService.playSound(
+        require("../assets/music/drop.mp3"),
       );
 
-      await sound.playAsync();
-
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          try { await sound.unloadAsync(); } catch (e) {}
-          router.push(screen as any);
-        }
-      });
+      if (sound) {
+        sound.setOnPlaybackStatusUpdate(async (status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            try {
+              await sound.unloadAsync();
+            } catch (e) {}
+            router.push(screen as any);
+          }
+        });
+      } else {
+        router.push(screen as any);
+      }
     } catch {
       router.push(screen as any);
     }
   };
 
-
   // ✅ AUTO PLAY BACKGROUND MUSIC + CLEANUP
   useFocusEffect(
     useCallback(() => {
-      void musicService.playAsync();
+      void musicService.playAsync(MUSIC_SOURCES.practice);
 
       return () => {
-        void musicService.stopAsync();
+        // DO NOT stop music here, let the destination screen decide
         Speech.stop();
       };
-    }, [])
+    }, []),
   );
 
   return (
-    <ImageBackground source={require("@/assets/int.png")} style={styles.container} resizeMode="cover">
+    <ImageBackground
+      source={require("@/assets/int.png")}
+      style={styles.container}
+      resizeMode="cover"
+    >
+      <AuthGuard />
       <SafeAreaView style={styles.safeArea}>
         {/* HEADER */}
         <View style={styles.header}>
@@ -119,7 +138,7 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   header: {
     flexDirection: "row",
@@ -129,9 +148,9 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   navButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.8)",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -139,8 +158,8 @@ const styles = StyleSheet.create({
   },
   navButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f9f9f9ff',
+    fontWeight: "bold",
+    color: "#f9f9f9ff",
   },
   title: {
     fontSize: 24,

@@ -1,9 +1,8 @@
+import { audioService } from "./audio/audioService";
 import * as Haptics from "expo-haptics";
-import * as Speech from "expo-speech";
 
 export function speakNow(text: string) {
-  Speech.stop();
-  Speech.speak(text, { rate: 0.85, pitch: 1.05 });
+  audioService.speak(text);
   Haptics.selectionAsync();
 }
 

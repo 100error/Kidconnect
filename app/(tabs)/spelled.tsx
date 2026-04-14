@@ -1,19 +1,24 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
+import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  BackHandler,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from "react-native";
 
 type SpellingSection = {
@@ -33,6 +38,9 @@ type SpellingRule = {
 };
 
 export default function Spelled() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -46,9 +54,37 @@ export default function Spelled() {
     "Learn the secrets of spelling! Tap any card to hear the rule and examples.",
   );
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   useFocusEffect(
     React.useCallback(() => {
+      void musicService.stopAsync();
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),

@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { kicoAudio, KicoAudioState } from "@/services/audio/kicoAudio";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Network from "expo-network";
 import { AnimatePresence, MotiView } from "moti";
 import React, { useEffect, useRef, useState } from "react";
@@ -15,6 +16,7 @@ import {
 import Animated, {
   cancelAnimation,
   Easing,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -23,6 +25,10 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+
+const AnimatedTouchableOpacity =
+  Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 // Asset Imports - Multi-Part Puppet
 const BODY_IMG = require("../assets/kico/body.png");
@@ -35,6 +41,18 @@ const WING_R_IMG = require("../assets/kico/rightwing.png");
 const LEG_L_IMG = require("../assets/kico/leftleg.png");
 const LEG_R_IMG = require("../assets/kico/rightleg.png");
 
+// --- UI Constants ---
+const GRADIENT_SETS = [
+  ["#FFB300", "#FF8F00"], // mustard → orange
+  ["#F44336", "#E91E63"], // red → pink
+  ["#2196F3", "#03A9F4"], // blue → light blue
+  ["#4CAF50", "#009688"], // green → teal
+  ["#E91E63", "#9C27B0"], // pink → purple
+  ["#9C27B0", "#3F51B5"], // purple → indigo
+] as const;
+const ROTATION_INTERVAL = 10000; // 10 seconds
+const TRANSITION_DURATION = 800; // 800ms
+
 export default function KicoMascot() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -46,6 +64,9 @@ export default function KicoMascot() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const isMounted = useRef(true);
+
+  // --- UI State ---
+  const colorIndex = useSharedValue(0);
 
   // --- Shared Values ---
   // Global Movement (Bounce/Jump)
@@ -87,6 +108,13 @@ export default function KicoMascot() {
     };
     kicoAudio.addListener(listener);
 
+    // --- Dynamic Color Rotation ---
+    const colorInterval = setInterval(() => {
+      if (isMounted.current) {
+        colorIndex.value = (colorIndex.value + 1) % GRADIENT_SETS.length;
+      }
+    }, ROTATION_INTERVAL);
+
     return () => {
       isMounted.current = false;
       if (sub && typeof sub.remove === "function") {
@@ -94,6 +122,7 @@ export default function KicoMascot() {
       }
       kicoAudio.removeListener(listener);
       kicoAudio.stopAll();
+      clearInterval(colorInterval);
     };
   }, []);
 
@@ -252,6 +281,28 @@ export default function KicoMascot() {
     ],
   }));
 
+  // --- Dynamic UI Styles ---
+  const gradientProps = useAnimatedProps(() => {
+    const index = Math.floor(colorIndex.value) % GRADIENT_SETS.length;
+    const [c1, c2] = GRADIENT_SETS[index];
+
+    return {
+      colors: [
+        withTiming(c1, { duration: TRANSITION_DURATION }),
+        withTiming(c2, { duration: TRANSITION_DURATION }),
+      ] as any,
+    };
+  });
+
+  const bubbleTailDynamicStyle = useAnimatedStyle(() => {
+    const index = Math.floor(colorIndex.value) % GRADIENT_SETS.length;
+    const [c1] = GRADIENT_SETS[index];
+
+    return {
+      borderBottomColor: withTiming(c1, { duration: TRANSITION_DURATION }),
+    };
+  });
+
   return (
     <View style={[styles.wrapper, isTablet && styles.tabletWrapper]}>
       {/* Speech Bubble Overlay */}
@@ -263,10 +314,20 @@ export default function KicoMascot() {
             exit={{ opacity: 0, scale: 0.5, translateY: 20 }}
             style={styles.bubbleOverlay}
           >
-            <View style={styles.bubble}>
-              <Text style={styles.bubbleText}>{message}</Text>
-            </View>
-            <View style={styles.bubbleTail} />
+            <AnimatedLinearGradient
+              animatedProps={gradientProps}
+              colors={[GRADIENT_SETS[0][0], GRADIENT_SETS[0][1]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bubbleGradient}
+            >
+              <View style={styles.bubbleInner}>
+                <Text style={styles.bubbleText}>{message}</Text>
+              </View>
+            </AnimatedLinearGradient>
+            <Animated.View
+              style={[styles.bubbleTail, bubbleTailDynamicStyle]}
+            />
           </MotiView>
         )}
       </AnimatePresence>
@@ -280,14 +341,23 @@ export default function KicoMascot() {
             exit={{ opacity: 0, scale: 0.8 }}
             style={styles.listeningOverlay}
           >
-            <Ionicons name="mic" size={16} color="#FF6F00" />
-            <Text style={styles.listeningText}>Kico is listening...</Text>
+            <AnimatedLinearGradient
+              animatedProps={gradientProps}
+              colors={[GRADIENT_SETS[0][0], GRADIENT_SETS[0][1]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.listeningContent}>
+              <Ionicons name="mic" size={16} color="#FFF" />
+              <Text style={styles.listeningText}>Kico is listening...</Text>
+            </View>
           </MotiView>
         )}
       </AnimatePresence>
 
       {/* Microphone Button (Right Side) */}
-      <TouchableOpacity
+      <AnimatedTouchableOpacity
         style={[
           styles.micButton,
           isListening && styles.micButtonListening,
@@ -296,16 +366,24 @@ export default function KicoMascot() {
         onPress={handleMicPress}
         activeOpacity={0.7}
       >
-        {isProcessing ? (
-          <Ionicons name="sync" size={24} color="#FFF" />
-        ) : (
-          <Ionicons
-            name={isListening ? "stop" : "mic"}
-            size={24}
-            color="#FFF"
-          />
-        )}
-      </TouchableOpacity>
+        <AnimatedLinearGradient
+          animatedProps={gradientProps}
+          colors={[GRADIENT_SETS[0][0], GRADIENT_SETS[0][1]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.micGradient}
+        >
+          {isProcessing ? (
+            <Ionicons name="sync" size={24} color="#FFF" />
+          ) : (
+            <Ionicons
+              name={isListening ? "stop" : "mic"}
+              size={24}
+              color="#FFF"
+            />
+          )}
+        </AnimatedLinearGradient>
+      </AnimatedTouchableOpacity>
 
       <TouchableWithoutFeedback onPress={handlePress}>
         <Animated.View style={[styles.characterContainer, containerStyle]}>
@@ -369,7 +447,7 @@ export default function KicoMascot() {
           </Animated.View>
         </Animated.View>
       </TouchableWithoutFeedback>
-    </View>
+    </View> 
   );
 }
 
@@ -512,19 +590,21 @@ const styles = StyleSheet.create({
     alignItems: "center", // Horizontal center relative to parent (wrapper)
     zIndex: 100,
   },
-  bubble: {
-    backgroundColor: "#FFF",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 22,
-    maxWidth: 200,
-    borderWidth: 4,
-    borderColor: "#FFB300", // Yellow-Orange border
+  bubbleGradient: {
+    borderRadius: 24,
+    padding: 6, // Slightly thicker border for more playfulness
+    maxWidth: 220,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  bubbleInner: {
+    backgroundColor: "#FFF",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
   },
   bubbleText: {
     fontSize: 16,
@@ -550,14 +630,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -50,
     alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingHorizontal: 15,
-    paddingVertical: 8,
     borderRadius: 25,
-    borderWidth: 2,
-    borderColor: "#FFB300",
+    overflow: "hidden", // Clip gradient to border radius
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -565,36 +639,48 @@ const styles = StyleSheet.create({
     elevation: 4,
     zIndex: 100,
   },
+  listeningContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+  },
   listeningText: {
     fontSize: 13,
-    color: "#FF6F00",
+    color: "#FFF", // Changed to white for better contrast on gradient
     fontWeight: "bold",
     marginLeft: 8,
   },
   micButton: {
     position: "absolute",
-    left: "72%", // Tighter position near Kico
-    top: "45%", // Body center alignment
-    width: 56, // Slightly larger and more visible
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#FFB300",
+    left: "72%",
+    top: "45%",
+    width: 60, // Slightly bigger
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "transparent",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 4,
+    borderWidth: 5, // Chunkier border
     borderColor: "#FFF",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 12,
     zIndex: 110,
+    overflow: "hidden",
+  },
+  micGradient: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
   micButtonListening: {
-    backgroundColor: "#F44336", // Red when listening
     transform: [{ scale: 1.15 }],
   },
   micButtonProcessing: {
-    backgroundColor: "#2196F3", // Blue when processing
+    // Keep processing style
   },
 });

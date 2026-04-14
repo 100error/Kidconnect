@@ -2,13 +2,17 @@ import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import NounCard, { NounLesson } from "@/components/ui/NounCard";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
   Platform,
   ScrollView,
   StatusBar,
@@ -143,7 +147,7 @@ const nounLessons: NounLesson[] = [
       "son-in-law",
       "ice cream",
     ],
-    color: "#E0F2F1", // Light Teal
+    color: "#E0F2F2", // Light Teal
     borderColor: "#009688",
   },
   {
@@ -185,6 +189,9 @@ const nounLessons: NounLesson[] = [
 ];
 
 export default function Nouns() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -196,6 +203,32 @@ export default function Nouns() {
     "nouns",
     "Learn about nouns! Tap a card to learn what each type of noun is.",
   );
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
 
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
@@ -209,17 +242,8 @@ export default function Nouns() {
 
   const [playingId, setPlayingId] = useState<string | null>(null);
 
-  // Stop speech when leaving the screen
-  useFocusEffect(
-    React.useCallback(() => {
-      return () => {
-        Speech.stop();
-        setPlayingId(null);
-      };
-    }, []),
-  );
-
   const handlePlay = (lesson: NounLesson) => {
+    if (!isMountedRef.current) return;
     try {
       // Stop any currently playing speech
       setPlayingId(lesson.id);
@@ -233,23 +257,27 @@ export default function Nouns() {
       TTS.speak(textToSpeak, {
         rate: 0.85,
         pitch: 1.1,
-        onDone: () => setPlayingId(null),
-        onStopped: () => setPlayingId(null),
+        onDone: () => {
+          if (isMountedRef.current) setPlayingId(null);
+        },
+        onStopped: () => {
+          if (isMountedRef.current) setPlayingId(null);
+        },
         onError: (error) => {
           console.warn("TTS Error in Nouns:", error);
-          setPlayingId(null);
+          if (isMountedRef.current) setPlayingId(null);
         },
       });
     } catch (error) {
       console.warn("handlePlay error in Nouns:", error);
-      setPlayingId(null);
+      if (isMountedRef.current) setPlayingId(null);
     }
   };
 
   const handleStop = () => {
     try {
       Speech.stop();
-      setPlayingId(null);
+      if (isMountedRef.current) setPlayingId(null);
     } catch (error) {
       console.warn("handleStop error in Nouns:", error);
     }

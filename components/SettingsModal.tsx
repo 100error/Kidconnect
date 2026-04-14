@@ -23,7 +23,6 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const router = useRouter();
   const [musicEnabled, setMusicEnabled] = useState(true);
-  const [soundsEnabled, setSoundEffectsEnabled] = useState(true);
 
   useEffect(() => {
     if (visible) {
@@ -33,19 +32,12 @@ export default function SettingsModal({
 
   const loadSettings = async () => {
     const m = await settingsService.isMusicEnabled();
-    const s = await settingsService.isSoundEffectsEnabled();
     setMusicEnabled(m);
-    setSoundEffectsEnabled(s);
   };
 
   const toggleMusic = async (value: boolean) => {
     setMusicEnabled(value);
     await settingsService.setMusicEnabled(value);
-  };
-
-  const toggleSounds = async (value: boolean) => {
-    setSoundEffectsEnabled(value);
-    await settingsService.setSoundEffectsEnabled(value);
   };
 
   const handleProfilePress = () => {
@@ -104,26 +96,6 @@ export default function SettingsModal({
                   onValueChange={toggleMusic}
                   trackColor={{ false: "#e0e0e0", true: "#90CAF9" }}
                   thumbColor={musicEnabled ? "#2196F3" : "#f4f3f4"}
-                />
-              </View>
-
-              <View style={styles.divider} />
-
-              {/* Sound Effects Toggle */}
-              <View style={styles.row}>
-                <View style={styles.rowLeft}>
-                  <Ionicons
-                    name={soundsEnabled ? "volume-high" : "volume-mute"}
-                    size={32}
-                    color="#FF9800"
-                  />
-                  <Text style={styles.rowText}>Sound Effects</Text>
-                </View>
-                <Switch
-                  value={soundsEnabled}
-                  onValueChange={toggleSounds}
-                  trackColor={{ false: "#e0e0e0", true: "#FFCC80" }}
-                  thumbColor={soundsEnabled ? "#FF9800" : "#f4f3f4"}
                 />
               </View>
             </View>

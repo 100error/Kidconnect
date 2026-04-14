@@ -8,13 +8,13 @@ import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    ImageSourcePropType,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  ImageSourcePropType,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 interface GameWordCardProps {
@@ -25,6 +25,7 @@ interface GameWordCardProps {
   onSuccess?: () => void;
   onFailure?: () => void;
   disabled?: boolean;
+  isExiting?: boolean;
   style?: any;
 }
 
@@ -36,6 +37,7 @@ export default function GameWordCard({
   onSuccess,
   onFailure,
   disabled = false,
+  isExiting = false,
   style,
 }: GameWordCardProps) {
   const [isListening, setIsListening] = useState(false);
@@ -46,19 +48,29 @@ export default function GameWordCard({
   useEffect(() => {
     return () => {
       speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 
-  const handleSpeak = () => {
-    if (!isListening) {
-      Speech.stop();
-      TTS.speak(word, { rate: 0.85, pitch: 1.1 });
+  const handleSpeak = async () => {
+    if (disabled || feedback === "correct" || isExiting) return;
+
+    // 🚫 BLOCK TTS WHILE RECORDING
+    if (isListening) {
+      setIsListening(false);
+      await speechService.stopRecording();
     }
+
+    Speech.stop();
+    TTS.speak(word, { rate: 0.85, pitch: 1.1 });
   };
 
   const verifySpeech = async (uri: string) => {
+    if (!uri || isExiting) return;
     try {
       const result = await speechService.recognizeSpeech(uri);
+      if (!result || isExiting) return;
+
       console.log(
         `Recognized: ${result.transcript} (Conf: ${result.confidence}) vs Target: ${word}`,
       );
@@ -73,6 +85,7 @@ export default function GameWordCard({
       });
 
       if (success) {
+        if (isExiting) return;
         setFeedback("correct");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         playbackService.playSound("correct");
@@ -80,45 +93,56 @@ export default function GameWordCard({
         TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
         if (onSuccess) onSuccess();
       } else {
+        if (isExiting) return;
         setFeedback("incorrect");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         playbackService.playSound("incorrect");
         Speech.stop();
         TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
         if (onFailure) onFailure();
-        setTimeout(() => setFeedback("idle"), 1500);
+        setTimeout(() => {
+          if (!isExiting) setFeedback("idle");
+        }, 1500);
       }
     } catch (e) {
       console.log("Recognition error:", e);
+      if (isExiting) return;
       setFeedback("incorrect");
       if (onFailure) onFailure();
-      setTimeout(() => setFeedback("idle"), 1500);
+      setTimeout(() => {
+        if (!isExiting) setFeedback("idle");
+      }, 1500);
     }
   };
 
   const toggleListening = async () => {
-    if (disabled || feedback === "correct") return;
+    if (disabled || feedback === "correct" || isExiting) return;
 
     if (isListening) {
-      // Stop
+      // SAFE STOP RECORDING
       setIsListening(false);
       try {
         const uri = await speechService.stopRecording();
-        if (uri) {
-          await verifySpeech(uri); // await ensures we process before resetting completely if needed
+        if (uri && !isExiting) {
+          await verifySpeech(uri);
         } else {
           setFeedback("idle");
         }
       } catch (e) {
+        console.error("Stop recording error:", e);
         setFeedback("idle");
       }
       return;
     }
 
-    // Start
+    // PREVENT DOUBLE RECORDING & STOP TTS
     try {
       const hasPermission = await ensureMicPermission();
-      if (!hasPermission) return;
+      if (!hasPermission || isExiting) return;
+
+      // STOP EVERYTHING BEFORE NEW ACTION
+      Speech.stop();
+      await speechService.stopRecording();
 
       setFeedback("listening");
       setIsListening(true);
@@ -130,6 +154,7 @@ export default function GameWordCard({
         setFeedback("idle");
       }
     } catch (e) {
+      console.error("Start recording error:", e);
       setIsListening(false);
       setFeedback("idle");
     }

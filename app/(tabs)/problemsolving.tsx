@@ -1,14 +1,18 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +37,9 @@ type ProblemItem = {
 };
 
 export default function ProblemSolving() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -44,6 +51,33 @@ export default function ProblemSolving() {
     "problemsolving",
     "Solve language puzzles! Tap a card to hear the question, then the answer.",
   );
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   const sections: ProblemSection[] = useMemo(
     () => [
       {
@@ -219,6 +253,7 @@ export default function ProblemSolving() {
   );
 
   const speak = (text: string) => {
+    if (!isMountedRef.current) return;
     try {
       if (!text) return;
       Speech.stop();
@@ -239,6 +274,7 @@ export default function ProblemSolving() {
       }
       return () => {
         try {
+          speechService.stopRecording();
           Speech.stop();
         } catch (error) {
           console.warn("Error stopping speech in ProblemSolving:", error);

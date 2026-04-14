@@ -1,25 +1,28 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Image,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    BackHandler,
+    Image,
+    Modal,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 
 // Define all available icons
@@ -93,6 +96,9 @@ interface CardItem {
 }
 
 export default function PracticePronunciation() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 5 : 4; // Use 4 columns for mobile to fit 16 items perfectly
@@ -102,28 +108,64 @@ export default function PracticePronunciation() {
 
   const TOTAL_PAIRS = 8; // 16 items total
 
-  const router = useRouter();
   const [restartCount, setRestartCount] = useState(0);
   const [cards, setCards] = useState<CardItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
+  const [finalScore, setFinalScore] = useState(0); // ✅ Added state for final score
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`matchpairs-${Date.now()}`); // ✅ UNIQUE SESSION ID
 
   // Instructions
   const { play: playInstruction } = useInstruction(
     "pronunciation",
-    "Tap matching pairs! Find the picture and the word that goes with it.",
+    "Match the correct pairs! Find the picture and the word that goes with it.",
   );
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/pract");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
 
   // Stop audio on unmount/blur
   useFocusEffect(
     React.useCallback(() => {
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),
   );
+
+  // Reset lock when screen loads
+  useEffect(() => {
+    hasSavedRef.current = false;
+    sessionIdRef.current = `matchpairs-${Date.now()}`;
+  }, []);
 
   // Pastel colors palette
   const cardColors = [
@@ -181,12 +223,24 @@ export default function PracticePronunciation() {
     setMistakes(new Set());
     setSelectedId(null);
     setShowResult(false);
+    setFinalScore(0);
     setIsProcessing(false);
+    hasSavedRef.current = false;
+    sessionIdRef.current = `matchpairs-${Date.now()}`;
+    // Reset game state for a new round
   }, [restartCount]);
 
   const handleCardPress = (card: CardItem) => {
-    if (isProcessing || card.state === "matched" || card.state === "selected")
+    if (
+      isProcessing ||
+      isRunningRef.current ||
+      card.state === "matched" ||
+      card.state === "selected" ||
+      !isMountedRef.current
+    )
       return;
+
+    isRunningRef.current = true;
 
     // Play TTS on tap (optional but helpful)
     Speech.stop();
@@ -198,10 +252,14 @@ export default function PracticePronunciation() {
         prev.map((c) => (c.id === card.id ? { ...c, state: "selected" } : c)),
       );
       setSelectedId(card.id);
+      isRunningRef.current = false;
     } else {
       // Second card selected
       const firstCard = cards.find((c) => c.id === selectedId);
-      if (!firstCard) return;
+      if (!firstCard) {
+        isRunningRef.current = false;
+        return;
+      }
 
       setCards((prev) =>
         prev.map((c) => (c.id === card.id ? { ...c, state: "selected" } : c)),
@@ -212,6 +270,7 @@ export default function PracticePronunciation() {
       if (firstCard.matchKey === card.matchKey) {
         // Correct Match
         setTimeout(() => {
+          if (!isMountedRef.current) return;
           setCards((prev) =>
             prev.map((c) =>
               c.matchKey === card.matchKey ? { ...c, state: "matched" } : c,
@@ -222,11 +281,13 @@ export default function PracticePronunciation() {
           TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
           setSelectedId(null);
           setIsProcessing(false);
+          isRunningRef.current = false;
           checkCompletion();
         }, 500);
       } else {
         // Incorrect Match
         setTimeout(() => {
+          if (!isMountedRef.current) return;
           setCards((prev) =>
             prev.map((c) =>
               c.id === firstCard.id || c.id === card.id
@@ -244,6 +305,7 @@ export default function PracticePronunciation() {
 
         // Reset after delay
         setTimeout(() => {
+          if (!isMountedRef.current) return;
           setCards((prev) =>
             prev.map((c) =>
               c.state === "mismatch" ? { ...c, state: "idle" } : c,
@@ -251,6 +313,7 @@ export default function PracticePronunciation() {
           );
           setSelectedId(null);
           setIsProcessing(false);
+          isRunningRef.current = false;
         }, 1500);
       }
     }
@@ -262,6 +325,7 @@ export default function PracticePronunciation() {
     // Actually, safer to rely on an effect or just check count.
     // Let's use a timeout to check the state after update.
     setTimeout(() => {
+      if (!isMountedRef.current) return;
       setCards((currentCards) => {
         const matchedCount = currentCards.filter(
           (c) => c.state === "matched",
@@ -275,22 +339,32 @@ export default function PracticePronunciation() {
   };
 
   const handleFinish = async () => {
-    // Adjust score out of 10 for consistency or out of TOTAL_PAIRS
+    if (hasSavedRef.current || !isMountedRef.current) return; // ✅ Guard: don't save twice
+    hasSavedRef.current = true;
+
     const rawScore = Math.max(0, TOTAL_PAIRS - mistakes.size);
-    const scorePercentage = (rawScore / TOTAL_PAIRS) * 100;
-    const passed = scorePercentage >= 60;
+    const score = Math.min(10, Math.round((rawScore / TOTAL_PAIRS) * 10)); // ✅ Score out of 10
+    const passed = score >= 6; // ✅ 60% passing (6/10)
 
-    // Save Result
-    await addResult({
-      activityId: "pronunciation-matching",
-      category: "practice",
-      score: rawScore * (10 / TOTAL_PAIRS) * 10, // Scale to 100
-      maxScore: 100,
-      completed: true,
-    });
+    if (!isMountedRef.current) return;
+    setFinalScore(score); // ✅ Store final score in state BEFORE showing results
 
+    await safeRun(() =>
+      addResult({
+        activityId: "pronunciation-matching",
+        sessionId: sessionIdRef.current,
+        category: "practice",
+        score: score, // ✅ Store as value between 0-10
+        maxScore: 10,
+        completed: true,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    if (!isMountedRef.current) return;
     setShowResult(true);
     Speech.stop();
+
     TTS.speak(passed ? "Awesome! You did it!" : "Good practice! Try again.", {
       rate: 0.85,
       pitch: 1.1,
@@ -298,13 +372,17 @@ export default function PracticePronunciation() {
   };
 
   const handleRestart = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     Speech.stop();
     setRestartCount((prev) => prev + 1);
+    isRunningRef.current = false;
   };
 
   const handleExit = () => {
-    Speech.stop();
-    router.replace("/pract");
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
+    safeExit();
   };
 
   return (
@@ -329,7 +407,7 @@ export default function PracticePronunciation() {
           </View>
         </View>
 
-        <Text style={styles.subtitle}>Tap matched pictures and words!</Text>
+        <Text style={styles.subtitle}>Match the pictures with the words!</Text>
 
         <ScrollView
           contentContainerStyle={styles.listContainer}
@@ -401,7 +479,7 @@ export default function PracticePronunciation() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                {10 - mistakes.size >= 6 ? "Great Job! 🎉" : "Keep Trying! 💪"}
+                {finalScore >= 6 ? "Great Job! 🎉" : "Keep Trying! 💪"}
               </Text>
 
               <View style={styles.resultScoreContainer}>
@@ -409,10 +487,10 @@ export default function PracticePronunciation() {
                 <Text
                   style={[
                     styles.resultScoreValue,
-                    { color: 10 - mistakes.size >= 6 ? "#4CAF50" : "#FF9800" },
+                    { color: finalScore >= 6 ? "#4CAF50" : "#FF9800" },
                   ]}
                 >
-                  {Math.max(0, 10 - mistakes.size)} / 10
+                  {finalScore} / 10
                 </Text>
               </View>
 

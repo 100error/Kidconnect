@@ -1,6 +1,7 @@
 import InstructionButton from "@/components/InstructionButton";
 import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
 import { musicService } from "@/services/audio/music";
 import { playbackService } from "@/services/audio/playback";
@@ -11,8 +12,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import { MotiView } from "moti";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
+  BackHandler,
   Image,
   ImageSourcePropType,
   Modal,
@@ -37,6 +45,7 @@ type Item = {
 
 export default function CauseEffect() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync(); // ✅ GLOBAL CRASH-PROOF HOOK
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const CARD_MAX = 600;
@@ -183,10 +192,32 @@ export default function CauseEffect() {
   const [recognized, setRecognized] = useState("");
   const [showResult, setShowResult] = useState(false);
 
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`causeeffect-${Date.now()}`); // ✅ UNIQUE SESSION ID
+
   const totalQuestions = items.length;
   const current = items[currentIndex];
+
+  useEffect(() => {
+    hasSavedRef.current = false;
+    sessionIdRef.current = `causeeffect-${Date.now()}`;
+  }, [sessionSeed]);
+
   const cardBg = pastelCardColors[currentIndex % pastelCardColors.length];
   const accent = accentColors[currentIndex % accentColors.length];
+
+  // ✅ SAFE EXIT FUNCTION
+  const safeExit = useCallback(async () => {
+    try {
+      await speechService.stopRecording();
+      await audioService.stop();
+      if (!isMountedRef.current) return;
+      router.replace("/games");
+    } catch (e) {
+      console.log("Safe Exit Error:", e);
+    }
+  }, [router, isMountedRef]);
 
   useEffect(() => {
     if (items.length > 0 && !showResult) {
@@ -195,12 +226,24 @@ export default function CauseEffect() {
     }
   }, [currentIndex, items, showResult]);
 
+  // ✅ GLOBAL AUDIO CLEANUP & HARDWARE BACK
   useEffect(() => {
-    return () => {
-      speechService.stopRecording();
-      audioService.stop();
+    const onBackPress = () => {
+      void safeExit();
+      return true;
     };
-  }, []);
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      onBackPress,
+    );
+
+    return () => {
+      subscription.remove();
+      void speechService.stopRecording();
+      void audioService.stop();
+    };
+  }, [safeExit]);
 
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
@@ -219,7 +262,7 @@ export default function CauseEffect() {
       .toLowerCase()
       .replace(/[^\w\s]/g, "")
       .replace(/\s+/g, " ")
-      .trim(); 
+      .trim();
   };
 
   const isExactMatch = (heard: string, target: string) => {
@@ -228,12 +271,25 @@ export default function CauseEffect() {
   };
 
   const toggleListening = async () => {
+    if (isRunningRef.current) return; // ✅ BLOCK MULTIPLE EXECUTION
+    isRunningRef.current = true;
+
     if (isListening) {
+      if (!isMountedRef.current) return;
       setIsListening(false);
       try {
-        const uri = await speechService.stopRecording();
+        const uri = await safeRun(() => speechService.stopRecording());
+        if (!isMountedRef.current) return;
+
         if (uri) {
-          const result = await speechService.recognizeSpeech(uri);
+          const result = await safeRun(() =>
+            speechService.recognizeSpeech(uri),
+          );
+          if (!isMountedRef.current || !result) {
+            isRunningRef.current = false;
+            return;
+          }
+
           const heardText = result.transcript || "";
           setRecognized(heardText);
 
@@ -245,54 +301,90 @@ export default function CauseEffect() {
             const nextCorrect = correctAnswers + 1;
             const isLast = currentIndex === totalQuestions - 1;
             if (isLast) {
+              if (hasSavedRef.current) {
+                isRunningRef.current = false;
+                return;
+              }
+              hasSavedRef.current = true;
+
               const score = nextCorrect;
-              await addResult({
-                activityId: "causeeffect",
-                category: "game",
-                score,
-                maxScore: totalQuestions,
-                completed: true,
-              });
+              await safeRun(() =>
+                addResult({
+                  activityId: "causeeffect",
+                  sessionId: sessionIdRef.current,
+                  category: "game",
+                  score,
+                  maxScore: 10,
+                  completed: true,
+                  timestamp: new Date().toISOString(),
+                }),
+              );
+
+              if (!isMountedRef.current) return;
+
               setTimeout(() => {
-                setShowResult(true);
+                if (isMountedRef.current) {
+                  setShowResult(true);
+                  isRunningRef.current = false;
+                }
               }, 600);
             } else {
               setTimeout(() => {
-                setCurrentIndex((i) => i + 1);
-                setCorrectAnswers(nextCorrect);
-                setStatus("idle");
-                setRecognized("");
-              }, 1500); // Give a bit more time to see the feedback
+                if (isMountedRef.current) {
+                  setCurrentIndex((i) => i + 1);
+                  setCorrectAnswers(nextCorrect);
+                  setStatus("idle");
+                  setRecognized("");
+                  isRunningRef.current = false;
+                }
+              }, 1500);
             }
           } else {
             setStatus("incorrect");
             playbackService.playSound("incorrect");
             audioService.speak("Try again!... Say it exactly.");
-            setTimeout(() => setStatus("idle"), 1200);
+            setTimeout(() => {
+              if (isMountedRef.current) {
+                setStatus("idle");
+                isRunningRef.current = false;
+              }
+            }, 1200);
           }
         } else {
           setStatus("idle");
+          isRunningRef.current = false;
         }
       } catch {
-        setStatus("idle");
+        if (isMountedRef.current) setStatus("idle");
+        isRunningRef.current = false;
       }
       return;
     }
 
     try {
-      const ok = await ensureMicPermission();
-      if (!ok) return;
-      playbackService.playSound("correct"); // Use button sound as click
+      const ok = await safeRun(() => ensureMicPermission());
+      if (!isMountedRef.current || !ok) {
+        isRunningRef.current = false;
+        return;
+      }
+
+      playbackService.playSound("correct");
       setStatus("listening");
       setIsListening(true);
-      await speechService.startRecording();
+      await safeRun(() => speechService.startRecording());
     } catch {
-      setIsListening(false);
-      setStatus("idle");
+      if (isMountedRef.current) {
+        setIsListening(false);
+        setStatus("idle");
+      }
+    } finally {
+      isRunningRef.current = false;
     }
   };
 
-  const handlePlayAgain = () => {
+  const handlePlayAgain = async () => {
+    if (!isMountedRef.current) return;
+    await safeExit();
     playbackService.playSound("correct");
     setSessionSeed((s) => s + 1);
     setCurrentIndex(0);
@@ -302,7 +394,9 @@ export default function CauseEffect() {
     setShowResult(false);
   };
 
-  const handleExit = () => {
+  const handleExit = async () => {
+    if (!isMountedRef.current) return;
+    await safeExit();
     playbackService.playSound("correct");
     router.replace("/games");
   };

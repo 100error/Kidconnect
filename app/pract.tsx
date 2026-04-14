@@ -1,11 +1,13 @@
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/ui/BackButton";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
 import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
+import { speechService } from "@/services/speechService";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import {
   FlatList,
   ImageBackground,
@@ -58,9 +60,14 @@ const lessons = [
 export default function Pract() {
   const router = useRouter();
   const { AuthGuard } = useRequireAuth();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
 
   // ✅ PLAY CLICK SOUND THEN NAVIGATE
   const playAndNavigate = async (screen: string) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     try {
       await musicService.stopAsync();
 
@@ -74,14 +81,17 @@ export default function Pract() {
             try {
               await sound.unloadAsync();
             } catch (e) {}
-            router.push(screen as any);
+            if (isMountedRef.current) router.push(screen as any);
+            isRunningRef.current = false;
           }
         });
       } else {
-        router.push(screen as any);
+        if (isMountedRef.current) router.push(screen as any);
+        isRunningRef.current = false;
       }
     } catch {
-      router.push(screen as any);
+      if (isMountedRef.current) router.push(screen as any);
+      isRunningRef.current = false;
     }
   };
 
@@ -92,6 +102,7 @@ export default function Pract() {
 
       return () => {
         // DO NOT stop music here, let the destination screen decide
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),

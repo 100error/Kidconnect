@@ -1,6 +1,4 @@
 import * as Speech from "expo-speech";
-import { settingsService } from "../settings";
-import { musicService } from "./music";
 
 /**
  * Global TTS Configuration for a Child-Friendly Voice
@@ -29,24 +27,18 @@ export const TTS = {
       expressiveText = text.replace(/([!.?])\s+/g, "$1 ... ");
     }
 
-    // 4. Trigger music ducking
-    void musicService.duckVolume();
-
-    // 5. Speak immediately
+    // 4. Speak immediately
     Speech.speak(expressiveText, {
       ...CHILD_FRIENDLY_CONFIG,
       ...options, // Keep other options (rate, onDone, etc.)
       pitch: 1.3, // FORCE high pitch for child-like voice, overriding any passed pitch
       onDone: () => {
-        void musicService.restoreVolume();
         options.onDone?.();
       },
       onStopped: () => {
-        void musicService.restoreVolume();
         options.onStopped?.();
       },
       onError: (error) => {
-        void musicService.restoreVolume();
         options.onError?.(error);
       },
     });

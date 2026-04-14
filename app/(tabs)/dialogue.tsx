@@ -1,20 +1,23 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
-  StyleSheet as RNStyleSheet,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    BackHandler,
+    StyleSheet as RNStyleSheet,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 
 type DialogueSection = {
@@ -33,6 +36,16 @@ type DialogueItem = {
 };
 
 export default function Dialogue() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+  const numColumns = isTablet ? 2 : 1;
+  const gap = 12;
+  const padding = 16;
+  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
+
   // Instructions
   const { play: playInstruction } = useInstruction(
     "dialogue",
@@ -235,10 +248,37 @@ export default function Dialogue() {
   );
 
   const speak = (text: string) => {
+    if (!isMountedRef.current) return;
     Speech.stop();
     TTS.speak(text, { rate: 0.85, pitch: 1.1 });
     Haptics.selectionAsync();
   };
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
 
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
@@ -249,13 +289,6 @@ export default function Dialogue() {
       };
     }, []),
   );
-
-  const { width } = useWindowDimensions();
-  const isTablet = width > 600;
-  const numColumns = isTablet ? 2 : 1;
-  const gap = 12;
-  const padding = 16;
-  const cardWidth = (width - padding * 2 - gap * (numColumns - 1)) / numColumns;
 
   return (
     <LinearGradient colors={["#E0F7FA", "#E1F5FE"]} style={styles.container}>

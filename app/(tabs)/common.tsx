@@ -2,21 +2,24 @@ import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    BackHandler,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 /* ================= TYPES ================= */
@@ -40,7 +43,7 @@ export type VowelSection = {
 export const vowelSections: VowelSection[] = [
   // New Categories (Articles, Pronouns, Prepositions, Conjunctions, Question Words, Verbs, Adjectives, Social)
   {
-    title: "📝 Articles",
+    title: "Articles",
     description: "Small words that introduce a noun.",
     examples: [
       { word: "The", example: "The dog is barking.", icon: "text" },
@@ -51,7 +54,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#0288D1",
   },
   {
-    title: "👤 Pronouns",
+    title: "Pronouns",
     description: "Words that replace names.",
     examples: [
       { word: "I", example: "I am happy.", icon: "person" },
@@ -66,7 +69,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#8E24AA",
   },
   {
-    title: "📍 Prepositions",
+    title: "Prepositions",
     description: "Words that show where or when.",
     examples: [
       { word: "In", example: "The cat is in the box.", icon: "cube-outline" },
@@ -84,7 +87,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#00897B",
   },
   {
-    title: "🔗 Conjunctions",
+    title: "Conjunctions",
     description: "Words that connect ideas.",
     examples: [
       {
@@ -113,7 +116,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#FB8C00",
   },
   {
-    title: "❓ Question Words",
+    title: "Question Words",
     description: "Words used to ask questions.",
     examples: [
       { word: "Who", example: "Who is that?", icon: "person-add" },
@@ -127,7 +130,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#E53935",
   },
   {
-    title: "🏃 Basic Verbs",
+    title: "Basic Verbs",
     description: "Action words we use every day.",
     examples: [
       { word: "Be", example: "Be nice to others.", icon: "heart" },
@@ -145,7 +148,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#7CB342",
   },
   {
-    title: "🌈 Descriptive Words",
+    title: "Descriptive Words",
     description: "Words that describe things (Adjectives).",
     examples: [
       { word: "Big", example: "The elephant is big.", icon: "expand" },
@@ -161,7 +164,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#FFB300",
   },
   {
-    title: "� Social Words",
+    title: "Social Words",
     description: "Polite words we say to others.",
     examples: [
       {
@@ -181,7 +184,7 @@ export const vowelSections: VowelSection[] = [
   },
   // Existing Phonics Categories
   {
-    title: "�🟡 ai (Phonics)",
+    title: "ai (Phonics)",
     description: "Long A (ā) like in Rain",
     examples: [
       { word: "Rain", example: "It started to rain outside.", icon: "rainy" },
@@ -201,7 +204,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#FBC02D",
   },
   {
-    title: "🔵 ea (Phonics)",
+    title: "ea (Phonics)",
     description: "Long E (ē) like in Eat",
     examples: [
       { word: "Eat", example: "We eat lunch at noon.", icon: "restaurant" },
@@ -221,7 +224,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#1976D2",
   },
   {
-    title: "🟠 oa (Phonics)",
+    title: "oa (Phonics)",
     description: "Long O (ō) like in Boat",
     examples: [
       { word: "Boat", example: "We sailed the boat.", icon: "boat" },
@@ -232,7 +235,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#F57C00",
   },
   {
-    title: "🟢 ee (Phonics)",
+    title: "ee (Phonics)",
     description: "Long E (ē) like in Tree",
     examples: [
       { word: "Tree", example: "The tree is tall.", icon: "leaf" },
@@ -243,7 +246,7 @@ export const vowelSections: VowelSection[] = [
     darkColor: "#388E3C",
   },
   {
-    title: "🔴 ou (Phonics)",
+    title: "ou (Phonics)",
     description: "Like in House",
     examples: [
       { word: "House", example: "We live in a big house.", icon: "home" },
@@ -259,6 +262,8 @@ export const vowelSections: VowelSection[] = [
 
 export default function Common() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   // Instructions
@@ -267,41 +272,77 @@ export default function Common() {
     "Learn common words! Tap a section to see examples and hear them spoken.",
   );
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
     useCallback(() => {
       void musicService.stopAsync();
       return () => {
         Speech.stop();
-        setPlayingId(null);
+        if (isMountedRef.current) setPlayingId(null);
       };
     }, []),
   );
 
   const handlePlay = (id: string, text: string) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
     try {
       setPlayingId(id);
       Speech.stop();
       TTS.speak(text, {
         rate: 0.85,
         pitch: 1.1,
-        onDone: () => setPlayingId(null),
-        onStopped: () => setPlayingId(null),
+        onDone: () => {
+          if (isMountedRef.current) setPlayingId(null);
+          isRunningRef.current = false;
+        },
+        onStopped: () => {
+          if (isMountedRef.current) setPlayingId(null);
+          isRunningRef.current = false;
+        },
         onError: (error) => {
           console.warn("TTS Error in Common:", error);
-          setPlayingId(null);
+          if (isMountedRef.current) setPlayingId(null);
+          isRunningRef.current = false;
         },
       });
     } catch (error) {
       console.warn("handlePlay error in Common:", error);
-      setPlayingId(null);
+      if (isMountedRef.current) setPlayingId(null);
+      isRunningRef.current = false;
     }
   };
 
   const handleStop = () => {
     try {
       Speech.stop();
-      setPlayingId(null);
+      if (isMountedRef.current) setPlayingId(null);
     } catch (error) {
       console.warn("handleStop error in Common:", error);
     }

@@ -7,7 +7,6 @@ import { TTS } from "./tts";
 
 class AudioService {
   private musicMuted: boolean = false;
-  private soundMuted: boolean = false;
 
   constructor() {
     this.init();
@@ -15,17 +14,12 @@ class AudioService {
 
   private async init() {
     this.musicMuted = !(await settingsService.isMusicEnabled());
-    this.soundMuted = !(await settingsService.isSoundEffectsEnabled());
 
     settingsService.addListener((settings) => {
       this.musicMuted = !settings.musicEnabled;
-      this.soundMuted = !settings.soundEffectsEnabled;
-      
+
       if (this.musicMuted) {
         musicService.stopAsync();
-      }
-      if (this.soundMuted) {
-        playbackService.stop();
       }
     });
   }
@@ -34,16 +28,8 @@ class AudioService {
     await settingsService.setMusicEnabled(!muted);
   }
 
-  async setSoundMuted(muted: boolean) {
-    await settingsService.setSoundEffectsEnabled(!muted);
-  }
-
   getIsMusicMuted() {
     return this.musicMuted;
-  }
-
-  getIsSoundMuted() {
-    return this.soundMuted;
   }
 
   async stopAllAudio() {
@@ -73,11 +59,9 @@ class AudioService {
   }
 
   /**
-   * Generic sound player that respects sound effects mute state
+   * Generic sound player
    */
   async playSound(source: any) {
-    if (this.soundMuted) return;
-
     try {
       const { sound } = await Audio.Sound.createAsync(source, {
         shouldPlay: true,

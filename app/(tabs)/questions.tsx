@@ -1,13 +1,17 @@
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -42,6 +46,9 @@ type PracticeItem = {
 };
 
 export default function Questions() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -56,11 +63,38 @@ export default function Questions() {
   );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   useFocusEffect(
     React.useCallback(() => {
       return () => {
+        speechService.stopRecording();
         Speech.stop();
-        setPlayingId(null);
+        if (isMountedRef.current) setPlayingId(null);
       };
     }, []),
   );
@@ -284,14 +318,21 @@ export default function Questions() {
   );
 
   const speak = (text: string, id: string) => {
+    if (!isMountedRef.current) return;
     setPlayingId(id);
     Speech.stop();
     TTS.speak(text, {
       rate: 0.85,
       pitch: 1.1,
-      onDone: () => setPlayingId(null),
-      onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null),
+      onDone: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
+      onStopped: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
+      onError: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
     });
     Haptics.selectionAsync();
   };
@@ -301,6 +342,7 @@ export default function Questions() {
     useCallback(() => {
       void musicService.stopAsync();
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),

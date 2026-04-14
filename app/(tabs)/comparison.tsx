@@ -1,15 +1,18 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,6 +41,8 @@ type ComparisonSection = {
 };
 
 export default function Comparison() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -342,6 +347,7 @@ export default function Comparison() {
   );
 
   const speak = (text: string, id: string) => {
+    if (!isMountedRef.current) return;
     try {
       if (!text) return;
       setPlayingId(id);
@@ -349,19 +355,49 @@ export default function Comparison() {
       TTS.speak(text, {
         rate: 0.85,
         pitch: 1.1,
-        onDone: () => setPlayingId(null),
-        onStopped: () => setPlayingId(null),
+        onDone: () => {
+          if (isMountedRef.current) setPlayingId(null);
+        },
+        onStopped: () => {
+          if (isMountedRef.current) setPlayingId(null);
+        },
         onError: (error) => {
           console.warn("TTS Error in Comparison:", error);
-          setPlayingId(null);
+          if (isMountedRef.current) setPlayingId(null);
         },
       });
       Haptics.selectionAsync().catch(() => {});
     } catch (error) {
       console.warn("speak error in Comparison:", error);
-      setPlayingId(null);
+      if (isMountedRef.current) setPlayingId(null);
     }
   };
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
 
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(

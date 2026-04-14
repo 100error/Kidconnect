@@ -1,16 +1,19 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+    BackHandler,
     Modal,
     SafeAreaView,
     ScrollView,
@@ -48,6 +51,8 @@ const staticRawData = [
 
 export default function SentenceBuild() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
@@ -60,12 +65,17 @@ export default function SentenceBuild() {
   const [showResult, setShowResult] = useState(false);
   const [restartCount, setRestartCount] = useState(0);
 
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`sentencebuilder-${Date.now()}`); // ✅ UNIQUE SESSION ID
+
   // Randomize questions on mount/restart - Slice to 10 to match score calculation
   useEffect(() => {
     const shuffled = [...staticRawData]
       .sort(() => 0.5 - Math.random())
       .slice(0, 10);
     setQuestions(shuffled);
+    hasSavedRef.current = false;
+    sessionIdRef.current = `sentencebuilder-${Date.now()}`;
   }, [restartCount]);
 
   // Instructions
@@ -74,11 +84,38 @@ export default function SentenceBuild() {
     "Fill in the blanks! Choose the correct word to complete the sentence.",
   );
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/pract");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   // Stop audio on unmount/blur
   useFocusEffect(
     useCallback(() => {
       void musicService.stopAsync();
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),
@@ -99,15 +136,25 @@ export default function SentenceBuild() {
   };
 
   const handleWordSelect = (word: string) => {
-    if (isWordUsed(word)) return;
+    if (isRunningRef.current || isWordUsed(word) || !isMountedRef.current)
+      return;
+    isRunningRef.current = true;
     Speech.stop();
     TTS.speak(word, { rate: 0.85, pitch: 1.1 });
     setSelectedWord(word === selectedWord ? null : word);
+    isRunningRef.current = false;
   };
 
   const handleSentencePress = (item: (typeof staticRawData)[0]) => {
     // If already completed, ignore
-    if (completedSentences[item.id]) return;
+    if (
+      isRunningRef.current ||
+      completedSentences[item.id] ||
+      !isMountedRef.current
+    )
+      return;
+
+    isRunningRef.current = true;
 
     if (!selectedWord) {
       // READ ALOUD Requirement: Read the sentence if tapped without selection
@@ -115,6 +162,7 @@ export default function SentenceBuild() {
       const textToRead = item.sentence.replace("___", "blank");
       Speech.stop();
       TTS.speak(textToRead, { rate: 0.85, pitch: 1.1 });
+      isRunningRef.current = false;
       return;
     }
 
@@ -131,27 +179,37 @@ export default function SentenceBuild() {
       if (Object.keys(newCompleted).length === questions.length) {
         setTimeout(finishGame, 1000);
       }
+      isRunningRef.current = false;
     } else {
       // Incorrect
       playbackService.playSound("incorrect");
       Speech.stop();
       TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
       setMistakes((prev) => new Set(prev).add(item.id));
+      isRunningRef.current = false;
     }
   };
 
   const finishGame = async () => {
+    if (hasSavedRef.current || !isMountedRef.current) return; // ✅ Guard: don't save twice
+    hasSavedRef.current = true;
+
     const score = Math.max(0, 10 - mistakes.size);
     const passed = score >= 6;
 
-    await addResult({
-      activityId: "sentence-build-worksheet",
-      category: "practice",
-      score: score * 10,
-      maxScore: 100,
-      completed: true,
-    });
+    await safeRun(() =>
+      addResult({
+        activityId: "sentence-build-worksheet",
+        sessionId: sessionIdRef.current,
+        category: "practice",
+        score: score,
+        maxScore: 10,
+        completed: true,
+        timestamp: new Date().toISOString(),
+      }),
+    );
 
+    if (!isMountedRef.current) return;
     setShowResult(true);
     Speech.stop();
     TTS.speak(
@@ -161,17 +219,21 @@ export default function SentenceBuild() {
   };
 
   const handleRestart = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     Speech.stop();
     setCompletedSentences({});
     setMistakes(new Set());
     setSelectedWord(null);
     setShowResult(false);
     setRestartCount((prev) => prev + 1);
+    isRunningRef.current = false;
   };
 
   const handleExit = () => {
-    Speech.stop();
-    router.replace("/pract");
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
+    safeExit();
   };
 
   return (

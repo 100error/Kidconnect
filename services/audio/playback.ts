@@ -8,17 +8,6 @@ const SOUNDS = {
 
 export const playbackService = {
   _current: null as Audio.Sound | null,
-  _isMuted: false,
-
-  init: async () => {
-    playbackService._isMuted = !(await settingsService.isSoundEffectsEnabled());
-    settingsService.addListener((settings) => {
-      playbackService._isMuted = !settings.soundEffectsEnabled;
-      if (playbackService._isMuted) {
-        playbackService.stop();
-      }
-    });
-  },
 
   stop: async () => {
     if (!playbackService._current) return;
@@ -32,11 +21,8 @@ export const playbackService = {
   },
 
   playSound: async (soundName: keyof typeof SOUNDS) => {
-    // 1. Check if sound is muted
-    if (playbackService._isMuted) return;
-
     try {
-      // 2. Single Instance Management - Stop previous sound effects
+      // 1. Single Instance Management - Stop previous sound effects
       await playbackService.stop();
 
       const { sound } = await Audio.Sound.createAsync(SOUNDS[soundName], {
@@ -58,6 +44,3 @@ export const playbackService = {
     }
   },
 };
-
-// Initialize the service
-playbackService.init();

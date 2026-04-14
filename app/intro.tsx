@@ -1,6 +1,10 @@
+import { useSafeAsync } from "@/hooks/useSafeAsync";
+import { audioService } from "@/services/audio/audioService";
+import { speechService } from "@/services/speechService";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
+import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ImageBackground,
@@ -10,10 +14,11 @@ import {
   View,
 } from "react-native";
 
-import { audioService } from "@/services/audio/audioService";
 import { settingsService } from "@/services/settings";
 
 export default function Intro() {
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false);
   const videoRef = useRef<Video>(null);
   const [audio, setAudio] = useState<Audio.Sound | null>(null);
   const [showButton, setShowButton] = useState(false);
@@ -52,7 +57,7 @@ export default function Intro() {
         const sound = await audioService.playSound(
           require("../assets/audio/kiko2.mp3"),
         );
-        if (sound) {
+        if (sound && isMountedRef.current) {
           setAudio(sound);
           soundInstance = sound;
 
@@ -61,8 +66,10 @@ export default function Intro() {
             if (status.isLoaded) {
               if (status.didJustFinish) {
                 // Clear subtitle and show button when audio ends
-                setCurrentSubtitle("");
-                setShowButton(true);
+                if (isMountedRef.current) {
+                  setCurrentSubtitle("");
+                  setShowButton(true);
+                }
               } else if (
                 status.positionMillis != null &&
                 !status.didJustFinish
@@ -73,16 +80,18 @@ export default function Intro() {
                     status.positionMillis >= s.start &&
                     status.positionMillis <= s.end,
                 );
-                setCurrentSubtitle(subtitle ? subtitle.text : "");
+                if (isMountedRef.current) {
+                  setCurrentSubtitle(subtitle ? subtitle.text : "");
+                }
               }
             }
           });
         } else {
-          setShowButton(true); // fallback if muted
+          if (isMountedRef.current) setShowButton(true); // fallback if muted
         }
       } catch (error) {
         console.log("Error playing audio:", error);
-        setShowButton(true); // fallback
+        if (isMountedRef.current) setShowButton(true); // fallback
       }
     }
 
@@ -93,22 +102,29 @@ export default function Intro() {
         soundInstance.stopAsync().catch(() => {});
         soundInstance.unloadAsync().catch(() => {});
       }
+      speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 
   const handleContinue = async () => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     try {
       if (audio) {
         await audio.stopAsync();
         await audio.unloadAsync();
-        setAudio(null);
+        if (isMountedRef.current) setAudio(null);
       }
       await settingsService.setHasSeenWelcome(true);
-      router.replace("/home");
+      if (isMountedRef.current) router.replace("/home");
     } catch (error) {
       console.log("Error stopping audio:", error);
       await settingsService.setHasSeenWelcome(true);
-      router.replace("/home");
+      if (isMountedRef.current) router.replace("/home");
+    } finally {
+      isRunningRef.current = false;
     }
   };
 

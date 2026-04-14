@@ -2,6 +2,7 @@ import InstructionButton from "@/components/InstructionButton";
 import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
@@ -13,8 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+    BackHandler,
     Image,
     Modal,
     Platform,
@@ -338,6 +340,8 @@ const TOTAL_QUESTIONS = 10;
 
 export default function OddWordOutScreen() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width, height } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 4 : 2;
@@ -362,11 +366,59 @@ export default function OddWordOutScreen() {
   >("neutral");
   const [showResultModal, setShowResultModal] = useState(false);
 
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`oddwordout-${Date.now()}`); // ✅ UNIQUE SESSION ID
+
   // Instructions
   const { play: playInstruction } = useInstruction(
     "oddwordout",
     "Find the odd one out! Look at the pictures and tap the one that doesn't belong.",
   );
+
+  // Reset lock when screen loads
+  useEffect(() => {
+    hasSavedRef.current = false;
+    sessionIdRef.current = `oddwordout-${Date.now()}`;
+  }, []);
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const saveAndExit = useCallback(async () => {
+    try {
+      await speechService.stopRecording();
+      Speech.stop();
+    } catch (e) {
+      console.log("Safe Exit Error:", e);
+    }
+    if (!isMountedRef.current) return;
+    router.replace("/games");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void saveAndExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      Speech.stop();
+      void speechService.stopRecording();
+    };
+  }, [saveAndExit]);
+
+  // Guidance logic
+  useEffect(() => {
+    if (QUESTIONS.length > 0 && !showResultModal) {
+      const guidanceText = "Listen to the words. Which one is the odd one out?";
+      Speech.stop();
+      TTS.speak(guidanceText, { rate: 0.85, pitch: 1.1 });
+    }
+  }, [currentQIndex, showResultModal]);
 
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
@@ -405,15 +457,18 @@ export default function OddWordOutScreen() {
   // --- Game Logic ---
 
   const handleOptionSelect = (option: Option) => {
-    if (isListening) return; // Prevent changing while listening
+    if (isRunningRef.current || isListening || !isMountedRef.current) return; // Prevent changing while listening
+    isRunningRef.current = true;
     setSelectedOption(option);
     setFeedbackMessage(`Now say "${option.word}"`);
     setFeedbackType("neutral");
     Speech.stop();
     speak(`Now say ${option.word}`);
+    isRunningRef.current = false;
   };
 
   const handleMicPress = () => {
+    if (isRunningRef.current) return;
     if (isListening) {
       handleStopAndEvaluate();
     } else {
@@ -422,44 +477,50 @@ export default function OddWordOutScreen() {
   };
 
   const toggleListening = async () => {
-    if (!selectedOption) return;
-
-    if (isListening) {
-      // Prevent double stop if already processing
-      return;
-    }
+    if (!selectedOption || isRunningRef.current || isListening) return;
+    isRunningRef.current = true;
 
     // Start
-    const allowed = await ensureMicPermission();
-    if (!allowed) {
+    const allowed = await safeRun(() => ensureMicPermission());
+    if (!isMountedRef.current || !allowed) {
       setFeedbackMessage("Microphone permission needed.");
+      isRunningRef.current = false;
       return;
     }
 
     try {
       setFeedbackMessage("Listening...");
       setIsListening(true);
-      await speechService.startRecording();
+      await safeRun(() => speechService.startRecording());
     } catch (e) {
       console.error(e);
-      setIsListening(false);
+      if (isMountedRef.current) setIsListening(false);
+    } finally {
+      isRunningRef.current = false;
     }
   };
 
   const handleStopAndEvaluate = async () => {
-    if (!isListening) return;
+    if (!isListening || isRunningRef.current) return;
+    isRunningRef.current = true;
 
     setIsListening(false);
     try {
-      const uri = await speechService.stopRecording();
-      if (uri) {
-        const result = await speechService.recognizeSpeech(uri);
-        handlePronunciationCheck(result);
+      const uri = await safeRun(() => speechService.stopRecording());
+      if (uri && isMountedRef.current) {
+        const result = await safeRun(() => speechService.recognizeSpeech(uri));
+        if (isMountedRef.current && result) {
+          handlePronunciationCheck(result);
+        }
       }
     } catch (e) {
       console.error(e);
-      setFeedbackMessage("Could not hear you. Try again.");
-      setFeedbackType("error");
+      if (isMountedRef.current) {
+        setFeedbackMessage("Could not hear you. Try again.");
+        setFeedbackType("error");
+      }
+    } finally {
+      isRunningRef.current = false;
     }
   };
 
@@ -467,7 +528,7 @@ export default function OddWordOutScreen() {
     transcript: string;
     confidence: number;
   }) => {
-    if (!selectedOption) return;
+    if (!selectedOption || !isMountedRef.current) return;
 
     const target = selectedOption.word
       .toLowerCase()
@@ -502,6 +563,7 @@ export default function OddWordOutScreen() {
     });
 
     if (!pronouncedCorrectly) {
+      if (!isMountedRef.current) return;
       setFeedbackMessage(`Try again. Say "${selectedOption.word}"`);
       setFeedbackType("error");
       playSound("wrong");
@@ -519,6 +581,7 @@ export default function OddWordOutScreen() {
   };
 
   const handleCorrectAnswer = () => {
+    if (!isMountedRef.current) return;
     setFeedbackMessage("Great job! That is the odd one!");
     setFeedbackType("success");
     setScore((s) => s + 1);
@@ -527,6 +590,7 @@ export default function OddWordOutScreen() {
     TTS.speak("Correct!", { rate: 0.85, pitch: 1.1 });
 
     setTimeout(() => {
+      if (!isMountedRef.current) return;
       if (currentQIndex < TOTAL_QUESTIONS - 1) {
         setCurrentQIndex(currentQIndex + 1);
         setSelectedOption(null);
@@ -539,6 +603,7 @@ export default function OddWordOutScreen() {
   };
 
   const handleWrongChoice = () => {
+    if (!isMountedRef.current) return;
     setFeedbackMessage("Nice pronunciation, but that belongs!");
     setFeedbackType("error");
     playSound("wrong");
@@ -546,6 +611,7 @@ export default function OddWordOutScreen() {
     TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
 
     setTimeout(() => {
+      if (!isMountedRef.current) return;
       setSelectedOption(null);
       setFeedbackMessage("Try a different one!");
       setFeedbackType("neutral");
@@ -553,6 +619,7 @@ export default function OddWordOutScreen() {
   };
 
   const nextQuestion = () => {
+    if (!isMountedRef.current) return;
     Speech.stop();
     if (currentQIndex < TOTAL_QUESTIONS - 1) {
       setCurrentQIndex((prev) => prev + 1);
@@ -564,26 +631,30 @@ export default function OddWordOutScreen() {
     }
   };
 
-  const finishGame = () => {
+  const finishGame = async () => {
+    if (hasSavedRef.current || !isMountedRef.current) return; // ✅ Guard: don't save twice
+    hasSavedRef.current = true;
+
     Speech.stop();
+    await safeRun(() =>
+      addResult({
+        activityId: "oddwordout",
+        sessionId: sessionIdRef.current,
+        category: "game",
+        score: score,
+        maxScore: 10,
+        completed: true,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    if (!isMountedRef.current) return;
     setShowResultModal(true);
   };
 
-  const saveAndExit = async () => {
-    Speech.stop();
-    await addResult({
-      activityId: "oddwordout",
-      category: "game",
-      score: score,
-      maxScore: TOTAL_QUESTIONS,
-      completed: true,
-    });
-
-    router.dismissAll();
-    router.replace("/games");
-  };
-
   const handleRetryGame = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     Speech.stop();
     setShowResultModal(false);
     setCurrentQIndex(0);
@@ -591,6 +662,9 @@ export default function OddWordOutScreen() {
     setSelectedOption(null);
     setFeedbackMessage("Tap the odd word!");
     setFeedbackType("neutral");
+    hasSavedRef.current = false; // ✅ Reset guard on restart
+    sessionIdRef.current = `oddwordout-${Date.now()}`; // ✅ New session ID
+    isRunningRef.current = false;
   };
 
   // --- Render ---

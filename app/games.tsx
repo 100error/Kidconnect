@@ -2,8 +2,10 @@ import GradientButton from "@/components/GradientButton";
 import OfflineGuard from "@/components/OfflineGuard";
 import BackButton from "@/components/ui/BackButton";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
 import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
+import { speechService } from "@/services/speechService";
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
@@ -53,10 +55,15 @@ const games = [
 export default function Games() {
   const router = useRouter();
   const { AuthGuard } = useRequireAuth();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const clickSoundRef = useRef<Audio.Sound | null>(null);
 
   // ✅ REUSABLE SOUND + NAVIGATION
   const playClickAndNavigate = async (route?: string, goBack?: boolean) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     try {
       await musicService.stopAsync();
 
@@ -77,22 +84,30 @@ export default function Games() {
               await sound.unloadAsync();
             } catch (e) {}
 
+            if (!isMountedRef.current) {
+              isRunningRef.current = false;
+              return;
+            }
+
             if (goBack) {
               router.back();
             } else if (route) {
               router.push(route as any);
             }
+            isRunningRef.current = false;
           }
         });
       } else {
         if (goBack) router.back();
         if (route) router.push(route as any);
+        isRunningRef.current = false;
       }
     } catch (error) {
       console.log("Navigation sound error:", error);
 
       if (goBack) router.back();
       if (route) router.push(route as any);
+      isRunningRef.current = false;
     }
   };
 
@@ -103,6 +118,7 @@ export default function Games() {
 
       return () => {
         // DO NOT stop music here, let the destination screen decide
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),
@@ -114,6 +130,8 @@ export default function Games() {
       if (clickSoundRef.current) {
         clickSoundRef.current.unloadAsync().catch(() => {});
       }
+      speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 

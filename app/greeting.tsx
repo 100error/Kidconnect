@@ -1,6 +1,9 @@
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
+import { speechService } from "@/services/speechService";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { router } from "expo-router";
+import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
@@ -14,6 +17,8 @@ import {
 const { width, height } = Dimensions.get("window");
 
 export default function Greeting() {
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false);
   const videoRef = useRef<Video>(null);
   const [audio, setAudio] = useState<Audio.Sound | null>(null);
 
@@ -25,7 +30,7 @@ export default function Greeting() {
         const sound = await audioService.playSound(
           require("../assets/audio/kiko1.mp3"), // your voice file
         );
-        if (sound) {
+        if (sound && isMountedRef.current) {
           setAudio(sound);
           soundInstance = sound;
         }
@@ -41,23 +46,31 @@ export default function Greeting() {
         soundInstance.stopAsync();
         soundInstance.unloadAsync();
       }
+      speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 
   const handleContinue = async () => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     try {
       // Stop and unload Kico's voice immediately
       if (audio) {
         await audio.stopAsync();
         await audio.unloadAsync();
-        setAudio(null);
+        if (isMountedRef.current) setAudio(null);
       }
 
+      if (!isMountedRef.current) return;
       // Navigate to the next screen
       router.push("/intro");
     } catch (error) {
       console.log("Error stopping audio:", error);
-      router.push("/intro");
+      if (isMountedRef.current) router.push("/intro");
+    } finally {
+      isRunningRef.current = false;
     }
   };
 

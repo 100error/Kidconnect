@@ -1,10 +1,13 @@
 import GradientButton from "@/components/GradientButton";
 import { useAuth } from "@/context/AuthContext";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
 import { UserProfile, profileService } from "@/services/profile";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import * as Speech from "expo-speech";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -39,6 +42,8 @@ export default function ProfileScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const { refreshProfile } = useAuth();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -54,7 +59,10 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       void musicService.playAsync(MUSIC_SOURCES.profile);
-      return () => {};
+      return () => {
+        speechService.stopRecording();
+        Speech.stop();
+      };
     }, []),
   );
 
@@ -65,6 +73,7 @@ export default function ProfileScreen() {
   const loadProfile = async () => {
     try {
       const p = await profileService.getProfile();
+      if (!isMountedRef.current) return;
       setProfile(p);
       if (p) {
         setUsername(p.username);
@@ -73,17 +82,22 @@ export default function ProfileScreen() {
     } catch (e) {
       console.error("Failed to load profile", e);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
   const handleRegister = async () => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     if (!username.trim()) {
       Alert.alert("Oops!", "Please enter your name.");
+      isRunningRef.current = false;
       return;
     }
     if (!selectedAvatar) {
       Alert.alert("Oops!", "Please choose an avatar.");
+      isRunningRef.current = false;
       return;
     }
 
@@ -94,22 +108,29 @@ export default function ProfileScreen() {
         selectedAvatar,
       );
       await refreshProfile();
+      if (!isMountedRef.current) return;
       setProfile(newProfile);
       Alert.alert("Success!", "Profile saved on this device.");
     } catch (e) {
-      Alert.alert("Error", "Could not save profile.");
+      if (isMountedRef.current) Alert.alert("Error", "Could not save profile.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
+      isRunningRef.current = false;
     }
   };
 
   const handleUpdate = async () => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     if (!username.trim()) {
       Alert.alert("Oops!", "Please enter your name.");
+      isRunningRef.current = false;
       return;
     }
     if (!selectedAvatar) {
       Alert.alert("Oops!", "Please choose an avatar.");
+      isRunningRef.current = false;
       return;
     }
 
@@ -120,13 +141,15 @@ export default function ProfileScreen() {
         selectedAvatar,
       );
       await refreshProfile();
+      if (!isMountedRef.current) return;
       setProfile(updatedProfile);
       setIsEditing(false);
       Alert.alert("Success!", "Profile updated!");
     } catch (e) {
-      Alert.alert("Error", "Could not update profile.");
+      if (isMountedRef.current) Alert.alert("Error", "Could not update profile.");
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
+      isRunningRef.current = false;
     }
   };
 

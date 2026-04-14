@@ -5,13 +5,11 @@ const SETTINGS_FILE = `${FileSystem.documentDirectory || FileSystem.cacheDirecto
 export interface Settings {
   hasSeenWelcome: boolean;
   musicEnabled: boolean;
-  soundEffectsEnabled: boolean;
 }
 
 const defaultSettings: Settings = {
   hasSeenWelcome: false,
   musicEnabled: true,
-  soundEffectsEnabled: true,
 };
 
 type SettingsListener = (settings: Settings) => void;
@@ -30,12 +28,10 @@ export const settingsService = {
       const content = await FileSystem.readAsStringAsync(SETTINGS_FILE);
       const settings = JSON.parse(content);
 
-      // Migration: if audioEnabled exists, use it for both music and sound
+      // Migration: if audioEnabled exists, use it for music
       if (settings.audioEnabled !== undefined) {
         if (settings.musicEnabled === undefined)
           settings.musicEnabled = settings.audioEnabled;
-        if (settings.soundEffectsEnabled === undefined)
-          settings.soundEffectsEnabled = settings.audioEnabled;
       }
 
       // Merge with default to ensure new keys exist
@@ -70,12 +66,6 @@ export const settingsService = {
     await this.saveSettings(settings);
   },
 
-  async setSoundEffectsEnabled(value: boolean): Promise<void> {
-    const settings = await this.getSettings();
-    settings.soundEffectsEnabled = value;
-    await this.saveSettings(settings);
-  },
-
   async hasSeenWelcome(): Promise<boolean> {
     const settings = await this.getSettings();
     return settings.hasSeenWelcome;
@@ -84,11 +74,6 @@ export const settingsService = {
   async isMusicEnabled(): Promise<boolean> {
     const settings = await this.getSettings();
     return settings.musicEnabled;
-  },
-
-  async isSoundEffectsEnabled(): Promise<boolean> {
-    const settings = await this.getSettings();
-    return settings.soundEffectsEnabled;
   },
 
   addListener(listener: SettingsListener) {

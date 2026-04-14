@@ -1,17 +1,20 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
   Image,
   Modal,
   ScrollView,
@@ -31,6 +34,8 @@ type SentenceItem = {
 
 export default function Fixsentence() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -170,6 +175,32 @@ export default function Fixsentence() {
     setSentenceData(shuffled.slice(0, 10));
   }, []);
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/pract");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   // Audio Guidance
   useFocusEffect(
     useCallback(() => {
@@ -180,6 +211,7 @@ export default function Fixsentence() {
       const playGuidance = async () => {
         // Stop any previous speech first
         await Speech.stop();
+        if (!isMountedRef.current) return;
         // Speak the guidance
         TTS.speak(
           "These are declarative sentences. Tap the words in the right order to build the sentence.",
@@ -207,6 +239,15 @@ export default function Fixsentence() {
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
 
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`fixsentence-${Date.now()}`); // ✅ UNIQUE SESSION ID
+
+  // Reset lock when screen loads or restarts
+  useEffect(() => {
+    hasSavedRef.current = false;
+    sessionIdRef.current = `fixsentence-${Date.now()}`;
+  }, []);
+
   // Instructions
   const { play: playInstruction } = useInstruction(
     "fixsentence",
@@ -214,13 +255,20 @@ export default function Fixsentence() {
   );
 
   const playSentence = (text: string) => {
+    if (!isMountedRef.current) return;
     Speech.stop();
     TTS.speak(text, { rate: 0.85, pitch: 1.1 });
   };
 
   const handleWordSelect = (id: string, word: string) => {
-    if (completedIds.includes(id)) return;
+    if (
+      isRunningRef.current ||
+      completedIds.includes(id) ||
+      !isMountedRef.current
+    )
+      return;
 
+    isRunningRef.current = true;
     const currentSelection = selections[id] || [];
     // Prevent selecting the same word instance multiple times (simple check)
     // In a real jumbled game, we might track indices, but here words are unique enough or we just append.
@@ -236,18 +284,47 @@ export default function Fixsentence() {
       // Clear feedback when typing
       setFeedbackState({ ...feedbackState, [id]: null });
     }
+    isRunningRef.current = false;
   };
 
   const handleReset = (id: string) => {
-    if (completedIds.includes(id)) return;
+    if (
+      isRunningRef.current ||
+      completedIds.includes(id) ||
+      !isMountedRef.current
+    )
+      return;
+    isRunningRef.current = true;
     const newSelections = { ...selections };
     delete newSelections[id];
     setSelections(newSelections);
     setFeedbackState({ ...feedbackState, [id]: null });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    isRunningRef.current = false;
+  };
+
+  const handleFinish = async (finalMistakes: Set<string>) => {
+    if (hasSavedRef.current || !isMountedRef.current) return; // 🚫 BLOCK duplicates
+    hasSavedRef.current = true;
+
+    const calculatedScore = Math.max(0, 10 - finalMistakes.size);
+
+    await safeRun(() =>
+      addResult({
+        activityId: "fixsentence",
+        sessionId: sessionIdRef.current,
+        category: "practice",
+        score: calculatedScore,
+        maxScore: 10,
+        completed: true,
+        timestamp: new Date().toISOString(),
+      }),
+    );
   };
 
   const handleCheck = async (item: SentenceItem) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
     const userWords = selections[item.id] || [];
     const userSentence = userWords.join(" ");
     const correctSentence = item.correct.replace(/[.?!]/g, "").toLowerCase();
@@ -266,16 +343,12 @@ export default function Fixsentence() {
         TTS.speak(item.correct, { rate: 0.85, pitch: 1.1 });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        await addResult({
-          activityId: `fixsentence-${item.id}`,
-          category: "practice",
-          score: 100,
-          maxScore: 100,
-          completed: true,
-        });
-
         if (newCompleted.length === sentenceData.length) {
+          // Finish activity
+          await handleFinish(mistakes);
+
           setTimeout(() => {
+            if (!isMountedRef.current) return;
             setShowResult(true);
             const score = 10 - mistakes.size;
             const passed = score >= 6;
@@ -289,30 +362,41 @@ export default function Fixsentence() {
           }, 1000);
         }
       }
+      isRunningRef.current = false;
     } else {
       // Incorrect
+      if (!isMountedRef.current) {
+        isRunningRef.current = false;
+        return;
+      }
       setFeedbackState({ ...feedbackState, [item.id]: "incorrect" });
       setMistakes((prev) => new Set(prev).add(item.id));
       playbackService.playSound("incorrect");
       Speech.stop();
       TTS.speak("Try again", { rate: 0.85, pitch: 1.1 });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      isRunningRef.current = false;
     }
   };
 
   const handleRestart = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     setSelections({});
     setCompletedIds([]);
     setFeedbackState({});
     setMistakes(new Set());
+    hasSavedRef.current = false; // ✅ RESET LOCK
+    sessionIdRef.current = `fixsentence-${Date.now()}`; // ✅ NEW SESSION ID
     setShowResult(false);
     Speech.stop();
+    isRunningRef.current = false;
   };
 
   const handleExit = () => {
-    setShowResult(false);
-    Speech.stop();
-    router.replace("/pract");
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
+    safeExit();
   };
 
   return (

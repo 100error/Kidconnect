@@ -1,7 +1,10 @@
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
+import { speechService } from "@/services/speechService";
 import { Audio } from "expo-av";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, ImageBackground, StyleSheet, View } from "react-native";
 import { settingsService } from "@/services/settings";
@@ -9,6 +12,7 @@ import { settingsService } from "@/services/settings";
 const { width } = Dimensions.get("window");
 
 export default function Index() {
+  const { isMountedRef, safeRun } = useSafeAsync();
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const lineAnim = useRef(new Animated.Value(0)).current;
 
@@ -21,7 +25,7 @@ export default function Index() {
 
       try {
         const bgSound = await audioService.playSound(require("../assets/music/fun.mp3"));
-        if (bgSound) {
+        if (bgSound && isMountedRef.current) {
           await bgSound.setIsLoopingAsync(true);
           setSound(bgSound);
           soundInstance = bgSound;
@@ -42,6 +46,7 @@ export default function Index() {
           } catch (e) { console.log("Error stopping sound", e); }
         }
         
+        if (!isMountedRef.current) return;
         const hasSeenWelcome = await hasSeenWelcomePromise;
         if (hasSeenWelcome) {
           router.replace("/home");
@@ -54,10 +59,12 @@ export default function Index() {
     startLoading();
 
     return () => {
-      if (sound) {
-        sound.stopAsync();
-        sound.unloadAsync();
+      if (soundInstance) {
+        soundInstance.stopAsync();
+        soundInstance.unloadAsync();
       }
+      speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 

@@ -1,27 +1,30 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    BackHandler,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 
 // ----------------------------------------------------------------------------
@@ -126,6 +129,8 @@ const staticQuestions: Question[] = [
 
 export default function PresentSimpleTenseScreen() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -142,10 +147,15 @@ export default function PresentSimpleTenseScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
 
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`presentsimple-${Date.now()}`); // ✅ UNIQUE SESSION ID
+
   // Randomize on mount
   useEffect(() => {
     const shuffled = [...staticQuestions].sort(() => 0.5 - Math.random());
     setQuestions(shuffled);
+    hasSavedRef.current = false;
+    sessionIdRef.current = `presentsimple-${Date.now()}`;
   }, []);
 
   // Instructions
@@ -154,10 +164,37 @@ export default function PresentSimpleTenseScreen() {
     "Fill in the blank with the correct verb in the bracket.",
   );
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/pract");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   // Stop audio on unmount/blur
   useFocusEffect(
     React.useCallback(() => {
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),
@@ -166,7 +203,7 @@ export default function PresentSimpleTenseScreen() {
   // Handle saving when all done
   useEffect(() => {
     const checkCompletion = async () => {
-      if (questions.length === 0) return; // Wait for questions to load
+      if (questions.length === 0 || !isMountedRef.current) return; // Wait for questions to load
 
       const answeredCount = Object.keys(answers).length;
       if (answeredCount === questions.length && !isCompleted) {
@@ -179,13 +216,22 @@ export default function PresentSimpleTenseScreen() {
         });
 
         // Save progress
-        await addResult({
-          activityId: "presentsimpletense",
-          category: "practice",
-          score: score,
-          maxScore: questions.length,
-          completed: true,
-        });
+        if (!hasSavedRef.current) {
+          hasSavedRef.current = true;
+          await safeRun(() =>
+            addResult({
+              activityId: "present-simple-tense",
+              sessionId: sessionIdRef.current,
+              category: "practice",
+              score: score,
+              maxScore: 10,
+              completed: true,
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+
+        if (!isMountedRef.current) return;
 
         // Final feedback
         if (score >= 6) {
@@ -208,26 +254,33 @@ export default function PresentSimpleTenseScreen() {
     };
 
     checkCompletion();
-  }, [answers, results, isCompleted]);
+  }, [answers, results, isCompleted, questions.length, isMountedRef, safeRun]);
 
   const handleTryAgain = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     Speech.stop();
     setAnswers({});
     setResults({});
     setActiveId(null);
     setIsCompleted(false);
+    hasSavedRef.current = false; // ✅ Reset guard on restart
+    sessionIdRef.current = `presentsimple-${Date.now()}`; // ✅ New session ID
     setModalVisible(false);
     setFinalScore(0);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    isRunningRef.current = false;
   };
 
   const handleExit = () => {
-    Speech.stop();
-    setModalVisible(false);
-    router.replace("/pract");
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
+    safeExit();
   };
 
   const handleSelect = (question: Question, option: string) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
     // Speak the word
     Speech.stop();
     TTS.speak(option, { rate: 0.85, pitch: 1.1 });
@@ -250,15 +303,19 @@ export default function PresentSimpleTenseScreen() {
       Speech.stop();
       TTS.speak("Try again.", { rate: 0.85, pitch: 1.1 });
     }
+    isRunningRef.current = false;
   };
 
   const handleBlankTap = (id: string) => {
-    if (results[id]) return; // Already correct, don't re-open
+    if (isRunningRef.current || results[id] || !isMountedRef.current) return; // Already correct, don't re-open
+    isRunningRef.current = true;
     setActiveId(activeId === id ? null : id);
     Haptics.selectionAsync();
+    isRunningRef.current = false;
   };
 
   const speakSentence = (text: string) => {
+    if (!isMountedRef.current) return;
     Speech.stop();
     TTS.speak(text, { rate: 0.85, pitch: 1.1 });
   };

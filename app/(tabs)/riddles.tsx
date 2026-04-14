@@ -1,31 +1,34 @@
 import InstructionButton from "@/components/InstructionButton";
 import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { playbackService } from "@/services/audio/playback";
 import { TTS } from "@/services/audio/tts";
 import { addResult } from "@/services/progress";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  Animated,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    Animated,
+    BackHandler,
+    Image,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 
 type Riddle = {
@@ -38,6 +41,8 @@ type Riddle = {
 
 export default function RiddlesScreen() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const columns = isTablet ? 2 : 1;
@@ -241,6 +246,9 @@ export default function RiddlesScreen() {
   const [showResult, setShowResult] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
 
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`riddles-${Date.now()}`); // ✅ UNIQUE SESSION ID
+
   useEffect(() => {
     const shuffled = [...rawRiddles].sort(() => 0.5 - Math.random());
     const session = shuffled.slice(0, 10);
@@ -253,6 +261,8 @@ export default function RiddlesScreen() {
     });
     setAnswers(initA);
     setResults(initR);
+    hasSavedRef.current = false;
+    sessionIdRef.current = `riddles-${Date.now()}`;
   }, [rawRiddles]);
 
   const { play: playInstruction } = useInstruction(
@@ -260,21 +270,42 @@ export default function RiddlesScreen() {
     "Listen to the riddle and tap the correct answer.",
   );
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/pract");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   // ✅ STOP BACKGROUND MUSIC ON LESSON SCREENS
   useFocusEffect(
     useCallback(() => {
       void musicService.stopAsync();
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),
   );
-
-  useEffect(() => {
-    return () => {
-      Speech.stop();
-    };
-  }, []);
 
   const scalesRef = useRef<Record<string, Animated.Value>>({});
   const ensureScale = (key: string) => {
@@ -285,12 +316,23 @@ export default function RiddlesScreen() {
   };
 
   const onSpeakQuestion = (q: string) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
     Speech.stop();
-    TTS.speak(q, { rate: 0.85, pitch: 1.1 });
+    const formatted = q.replace(/,/g, ", ").replace(/\./g, ". ");
+    TTS.speak(formatted, { rate: 0.5, pitch: 1.0 });
+    isRunningRef.current = false;
   };
 
   const onSelect = async (riddle: Riddle, option: string) => {
-    if (results[riddle.id] === "correct") return;
+    if (
+      isRunningRef.current ||
+      results[riddle.id] === "correct" ||
+      !isMountedRef.current
+    )
+      return;
+
+    isRunningRef.current = true;
     setAnswers((prev) => ({ ...prev, [riddle.id]: option }));
 
     const s = ensureScale(`${riddle.id}-${option}`);
@@ -318,6 +360,7 @@ export default function RiddlesScreen() {
       TTS.speak("Try again", { rate: 0.85, pitch: 1.1 });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
+    isRunningRef.current = false;
   };
 
   const total = riddles.length;
@@ -328,7 +371,7 @@ export default function RiddlesScreen() {
   );
 
   useEffect(() => {
-    if (total === 0) return;
+    if (total === 0 || !isMountedRef.current) return;
     if (answeredCount === total && !showResult) {
       const score = correctCount;
       const encouragement =
@@ -339,15 +382,22 @@ export default function RiddlesScreen() {
             : "Nice try! Let’s practice more!";
 
       (async () => {
-        try {
-          await addResult({
+        if (hasSavedRef.current || !isMountedRef.current) return; // ✅ Guard: don't save twice
+        hasSavedRef.current = true;
+
+        await safeRun(() =>
+          addResult({
             activityId: "riddles",
+            sessionId: sessionIdRef.current,
             category: "practice",
             score,
-            maxScore: total,
+            maxScore: 10,
             completed: true,
-          });
-        } catch {}
+            timestamp: new Date().toISOString(),
+          }),
+        );
+
+        if (!isMountedRef.current) return;
         playbackService.playSound("correct");
         Speech.stop();
         TTS.speak(encouragement, { rate: 0.85, pitch: 1.1 });
@@ -355,9 +405,11 @@ export default function RiddlesScreen() {
         setShowResult(true);
       })();
     }
-  }, [answeredCount, correctCount, total, showResult]);
+  }, [answeredCount, correctCount, total, showResult, isMountedRef, safeRun]);
 
   const handlePlayAgain = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     const shuffled = [...rawRiddles].sort(() => 0.5 - Math.random());
     const session = shuffled.slice(0, 10);
     setRiddles(session);
@@ -372,13 +424,16 @@ export default function RiddlesScreen() {
     setCorrectCount(0);
     setFinalScore(0);
     setShowResult(false);
+    hasSavedRef.current = false; // ✅ Reset guard on restart
+    sessionIdRef.current = `riddles-${Date.now()}`; // ✅ New session ID
     Speech.stop();
+    isRunningRef.current = false;
   };
 
   const handleExit = () => {
-    setShowResult(false);
-    Speech.stop();
-    router.replace("/pract");
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
+    safeExit();
   };
 
   return (

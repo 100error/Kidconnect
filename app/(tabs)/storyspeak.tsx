@@ -12,18 +12,24 @@ import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-    Alert,
-    Image,
-    Platform,
-    SafeAreaView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  Alert,
+  Image,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from "react-native";
 
 type Story = {
@@ -150,6 +156,14 @@ function StorySpeak() {
     "neutral" | "correct" | "incorrect"
   >("neutral");
 
+  const hasSavedRef = useRef(false); // ✅ Prevent double saving
+  const sessionIdRef = useRef(`${Date.now()}`); // ✅ UNIQUE SESSION ID
+
+  // ✅ 1. Randomize and select 10 items on mount
+  const shuffledStories = useMemo(() => {
+    return [...stories].sort(() => 0.5 - Math.random()).slice(0, 10);
+  }, [stories]);
+
   // Instructions
   const { play: playInstruction } = useInstruction(
     "storyspeak",
@@ -166,7 +180,7 @@ function StorySpeak() {
     }, []),
   );
 
-  const currentStory = stories[currentIndex];
+  const currentStory = shuffledStories[currentIndex];
 
   const playSound = async (type: "correct" | "wrong") => {
     if (type === "correct") {
@@ -180,8 +194,9 @@ function StorySpeak() {
     transcript: string;
     confidence: number;
   }) => {
+    if (!result || !result.transcript) return;
     const spoken = result.transcript.toLowerCase();
-    setRecognizedText(spoken); 
+    setRecognizedText(spoken);
 
     // Check if the spoken text contains the target word
     if (speechService.checkSpeechAccuracy(result, currentStory.target)) {
@@ -198,27 +213,33 @@ function StorySpeak() {
           `You read the word “${currentStory.target}”!`,
           [
             {
-              text: currentIndex < stories.length - 1 ? "Next" : "Finish",
+              text:
+                currentIndex < shuffledStories.length - 1 ? "Next" : "Finish",
               onPress: async () => {
                 Speech.stop();
-                if (currentIndex < stories.length - 1) {
+                if (currentIndex < shuffledStories.length - 1) {
                   setCurrentIndex(currentIndex + 1);
                   setRecognizedText("");
                   setWordStatus("neutral");
                 } else {
+                  if (hasSavedRef.current) return;
+                  hasSavedRef.current = true;
+
                   setGameCompleted(true);
-                  const score = stories.length - mistakes.size;
+                  const score = Math.max(0, 10 - mistakes.size); // ✅ Score out of 10
                   await addResult({
                     activityId: "storyspeak",
+                    sessionId: sessionIdRef.current,
                     category: "game",
-                    score: Math.max(0, score),
-                    maxScore: stories.length,
+                    score: score,
+                    maxScore: 10,
                     completed: true,
+                    timestamp: new Date().toISOString(),
                   });
 
                   Alert.alert(
                     "Game Over!",
-                    `You scored ${score} / ${stories.length}`,
+                    `You scored ${score} / 10`, // ✅ UI always shows /10
                     [{ text: "Exit", onPress: handleExit }],
                   );
                 }

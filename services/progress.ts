@@ -1,31 +1,31 @@
 import { getDeviceId } from "@/services/device";
-import { documentDirectory, getInfoAsync, readAsStringAsync, writeAsStringAsync } from "expo-file-system/legacy";
+import {
+    documentDirectory,
+    getInfoAsync,
+    readAsStringAsync,
+    writeAsStringAsync,
+} from "expo-file-system/legacy";
 
 type Category = "practice" | "game";
 
-type ActivityResult = {
+export type ActivityResult = {
   deviceId: string;
   activityId: string;
+  sessionId?: string; // ✅ Unique session ID
   category: Category;
   score: number;
   maxScore: number;
   completed: boolean;
-  timestamp: number;
+  timestamp: string; // ISO format
   synced?: boolean;
-};
-
-type CurrentSession = {
-  sumPercent: number;
-  count: number;
-  lastUpdatedAt: number;
 };
 
 type ProgressDB = {
   results: ActivityResult[];
-  currentSession?: CurrentSession;
 };
 
 const PROGRESS_FILE = `${documentDirectory}progress.json`;
+const TOTAL_ACTIVITIES = 9; // Total activities to track progress against
 
 let listeners = new Set<(deviceId: string) => void>();
 
@@ -43,6 +43,25 @@ async function loadDB(): Promise<ProgressDB> {
   try {
     const data = JSON.parse(content || "{}");
     if (!data || !Array.isArray(data.results)) return { results: [] };
+
+    // ✅ CLEAN EXISTING DUPLICATES
+    const uniqueMap = new Map<string, ActivityResult>();
+    data.results.forEach((r: ActivityResult) => {
+      // Priority 1: sessionId
+      // Priority 2: activityId + dateKey + score
+      const dateKey = new Date(r.timestamp).toISOString().split("T")[0];
+      const key = r.sessionId || `${r.activityId}-${dateKey}-${r.score}`;
+
+      const existing = uniqueMap.get(key);
+      if (
+        !existing ||
+        new Date(r.timestamp).getTime() > new Date(existing.timestamp).getTime()
+      ) {
+        uniqueMap.set(key, r);
+      }
+    });
+
+    data.results = Array.from(uniqueMap.values());
     return data as ProgressDB;
   } catch {
     return { results: [] };
@@ -50,106 +69,123 @@ async function loadDB(): Promise<ProgressDB> {
 }
 
 async function saveDB(db: ProgressDB): Promise<void> {
+  // ✅ FINAL CLEANUP BEFORE SAVING
+  const uniqueMap = new Map<string, ActivityResult>();
+  db.results.forEach((r) => {
+    const dateKey = new Date(r.timestamp).toISOString().split("T")[0];
+    const key = r.sessionId || `${r.activityId}-${dateKey}-${r.score}`;
+
+    const existing = uniqueMap.get(key);
+    if (
+      !existing ||
+      new Date(r.timestamp).getTime() > new Date(existing.timestamp).getTime()
+    ) {
+      uniqueMap.set(key, r);
+    }
+  });
+  db.results = Array.from(uniqueMap.values());
+
   await writeAsStringAsync(PROGRESS_FILE, JSON.stringify(db));
 }
 
-export async function addResult(input: Omit<ActivityResult, "deviceId" | "timestamp" | "synced">): Promise<void> {
+export async function addResult(
+  input: Omit<ActivityResult, "deviceId" | "synced" | "timestamp"> & {
+    timestamp?: string;
+  },
+): Promise<void> {
   const db = await loadDB();
   const deviceId = await getDeviceId();
-  const timestamp = Date.now();
-  const result: ActivityResult = { ...input, deviceId, completed: !!input.completed, timestamp, synced: false };
-  db.results.push(result);
+  const timestamp = input.timestamp || new Date().toISOString();
+  const dateKey = new Date(timestamp).toISOString().split("T")[0];
 
-  // 24-Hour Rolling Session Logic
-  const normalized = result.maxScore > 0 ? (result.score / result.maxScore) * 100 : 0;
-  
-  if (!db.currentSession || (timestamp - db.currentSession.lastUpdatedAt >= 24 * 60 * 60 * 1000)) {
-    // Start new session
-    db.currentSession = {
-      sumPercent: normalized,
-      count: 1,
-      lastUpdatedAt: timestamp
-    };
-  } else {
-    // Update existing session
-    db.currentSession.sumPercent += normalized;
-    db.currentSession.count += 1;
-    db.currentSession.lastUpdatedAt = timestamp;
+  console.log("Saving result:", input.activityId, "Session:", input.sessionId);
+
+  // ✅ DUPLICATE PREVENTION (CRITICAL)
+  // 1. Check by Session ID
+  if (input.sessionId) {
+    const exists = db.results.some((r) => r.sessionId === input.sessionId);
+    if (exists) {
+      console.log("Session ID already exists, skipping:", input.sessionId);
+      return;
+    }
   }
 
+  // 2. Check by Activity + Date + Score (User Requirement)
+  const isDuplicate = db.results.some(
+    (r) =>
+      r.activityId === input.activityId &&
+      new Date(r.timestamp).toISOString().split("T")[0] === dateKey &&
+      r.score === input.score,
+  );
+
+  if (isDuplicate) {
+    console.log("Duplicate activity/score found for today, skipping.");
+    return;
+  }
+
+  const result: ActivityResult = {
+    ...input,
+    deviceId,
+    completed: !!input.completed,
+    timestamp,
+    synced: false,
+  };
+
+  db.results.push(result);
   await saveDB(db);
   emit(deviceId);
 }
 
 // ----------------------------------------------------------------------
-// NEW PROGRESS LOGIC (Fair Distribution)
+// NEW PROGRESS LOGIC (Sum of Scores / Sum of Max)
 // ----------------------------------------------------------------------
 
-const ACTIVITIES = [
-  { id: "presentsimpletense", type: "single" as const },
-  { id: "sentence-build-worksheet", type: "single" as const },
-  { id: "pronunciation-matching", type: "single" as const },
-  { id: "oddwordout", type: "single" as const },
-  { id: "storyspeak", type: "single" as const },
-  { id: "pronunciation-game", type: "single" as const },
-  { id: "causeeffect", type: "single" as const },
-  { id: "riddles", type: "single" as const },
-  { id: "fixsentence", type: "multi" as const, count: 10 },
-];
- 
-function calculateCoverage(results: ActivityResult[]): number {
-  if (results.length === 0) return 0;
-
-  let totalProgress = 0;
-
-  for (const activity of ACTIVITIES) {
-    if (activity.type === "single") {
-      // Check if any completed entry exists for this activity
-      const hasCompleted = results.some((r) => r.activityId === activity.id && r.completed);
-      if (hasCompleted) {
-        totalProgress += 1;
-      }
-    } else if (activity.type === "multi") {
-      // Count unique completed IDs for this activity (e.g., fixsentence-1, fixsentence-2)
-      const uniqueCompleted = new Set(
-        results
-          .filter((r) => r.activityId.startsWith(activity.id + "-") && r.completed)
-          .map((r) => r.activityId)
-      );
-      // Cap at expected count (10)
-      const count = Math.min(uniqueCompleted.size, activity.count);
-      totalProgress += (count / activity.count);
-    }
-  }
-
-  // Calculate percentage: (Total Points / Total Activities) * 100
-  return Math.round((totalProgress / ACTIVITIES.length) * 100);
-}
-
-export async function getOverallPercent(deviceIdParam?: string): Promise<number> {
+export async function getOverallPercent(
+  deviceIdParam?: string,
+): Promise<number> {
   const db = await loadDB();
   const deviceId = deviceIdParam || (await getDeviceId());
-  // Filter all completed results for this device
-  const items = db.results.filter((r) => r.deviceId === deviceId && r.completed);
-  return calculateCoverage(items);
-}
 
-export async function getCurrent24hProgress(deviceIdParam?: string): Promise<number> {
-  const db = await loadDB();
-  const deviceId = deviceIdParam || (await getDeviceId());
-  
-  // Define "Current Session" as results from the last 24 hours
-  // This matches the user's intent of "Daily Progress" resetting daily/session-based
-  const now = Date.now();
-  const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-
-  const items = db.results.filter((r) => 
-    r.deviceId === deviceId && 
-    r.completed && 
-    r.timestamp >= twentyFourHoursAgo
+  // ✅ 1. FILTER FOR ALL COMPLETED RESULTS
+  const rawItems = db.results.filter(
+    (r) => r.deviceId === deviceId && r.completed,
   );
 
-  return calculateCoverage(items);
+  if (rawItems.length === 0) return 0;
+
+  // ✅ 2. COUNT UNIQUE COMPLETED ACTIVITIES (Overall completion)
+  const completedEver = new Set(rawItems.map((r) => r.activityId));
+  const completedCount = completedEver.size;
+
+  // ✅ 3. CALCULATE PROGRESS (Number of completed activities / Total)
+  return Math.min(100, Math.round((completedCount / TOTAL_ACTIVITIES) * 100));
+}
+
+export async function getCurrent24hProgress(
+  deviceIdParam?: string,
+): Promise<number> {
+  const db = await loadDB();
+  const deviceId = deviceIdParam || (await getDeviceId());
+
+  const todayKey = new Date().toISOString().split("T")[0];
+
+  // ✅ 1. FILTER FOR TODAY'S COMPLETED RESULTS
+  const rawItems = db.results.filter(
+    (r) =>
+      r.deviceId === deviceId &&
+      r.completed &&
+      new Date(r.timestamp).toISOString().split("T")[0] === todayKey,
+  );
+
+  if (rawItems.length === 0) return 0;
+
+  // ✅ 2. COUNT UNIQUE COMPLETED ACTIVITIES FOR TODAY (strictly increasing)
+  const completedToday = new Set(rawItems.map((r) => r.activityId));
+  const completedCount = completedToday.size;
+
+  // ✅ 3. CALCULATE PROGRESS (Number of completed activities / Total)
+  // Recommended for kids: This ensures progress never drops within a day
+  return Math.min(100, Math.round((completedCount / TOTAL_ACTIVITIES) * 100));
 }
 
 function emit(deviceId: string) {
@@ -160,70 +196,113 @@ function emit(deviceId: string) {
   });
 }
 
-export function subscribeProgress(listener: (deviceId: string) => void): () => void {
+export function subscribeProgress(
+  listener: (deviceId: string) => void,
+): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-export async function getUnsynced(deviceIdParam?: string): Promise<ActivityResult[]> {
+export async function getUnsynced(
+  deviceIdParam?: string,
+): Promise<ActivityResult[]> {
   const db = await loadDB();
   const deviceId = deviceIdParam || (await getDeviceId());
   return db.results.filter((r) => r.deviceId === deviceId && !r.synced);
 }
 
-export async function markSynced(predicate: (r: ActivityResult) => boolean): Promise<void> {
+export async function markSynced(
+  predicate: (r: ActivityResult) => boolean,
+): Promise<void> {
   const db = await loadDB();
-  db.results = db.results.map((r) => (predicate(r) ? { ...r, synced: true } : r));
+  db.results = db.results.map((r) =>
+    predicate(r) ? { ...r, synced: true } : r,
+  );
   await saveDB(db);
 }
 
-// Legacy helper for history (optional, can reuse logic)
-export async function getDailyHistory(deviceIdParam?: string): Promise<DailyProgress[]> {
+export async function getResultsByDate(
+  date?: string, // Expected ISO format YYYY-MM-DD or will default to today
+  deviceIdParam?: string,
+): Promise<ActivityResult[]> {
   const db = await loadDB();
   const deviceId = deviceIdParam || (await getDeviceId());
-  
-  // Group results by date (YYYY-MM-DD)
-  const historyMap = new Map<string, ActivityResult[]>();
-  
+  const dateKey = date || new Date().toISOString().split("T")[0];
+
+  return db.results.filter(
+    (r) =>
+      r.deviceId === deviceId &&
+      new Date(r.timestamp).toISOString().split("T")[0] === dateKey,
+  );
+}
+
+export async function getAllResults(
+  deviceIdParam?: string,
+): Promise<ActivityResult[]> {
+  const db = await loadDB();
+  const deviceId = deviceIdParam || (await getDeviceId());
+
+  // Return all results for this device, but cleaned of duplicates
+  const cleanedResultsMap = new Map<string, ActivityResult>();
+
+  db.results.forEach((r) => {
+    if (r.deviceId !== deviceId) return;
+
+    const dateKey = new Date(r.timestamp).toISOString().split("T")[0];
+    const key = r.sessionId || `${r.activityId}-${dateKey}-${r.score}`;
+
+    const existing = cleanedResultsMap.get(key);
+    if (
+      !existing ||
+      new Date(r.timestamp).getTime() > new Date(existing.timestamp).getTime()
+    ) {
+      cleanedResultsMap.set(key, r);
+    }
+  });
+
+  return Array.from(cleanedResultsMap.values());
+}
+
+export async function getDailyHistory(
+  deviceIdParam?: string,
+): Promise<DailyProgress[]> {
+  const db = await loadDB();
+  const deviceId = deviceIdParam || (await getDeviceId());
+
+  const historyMap = new Map<
+    string,
+    { totalScore: number; totalMax: number }
+  >();
+
   db.results
-    .filter(r => r.deviceId === deviceId && r.completed)
-    .forEach(r => {
-      const dateKey = new Date(r.timestamp).toISOString().split('T')[0];
-      if (!historyMap.has(dateKey)) {
-        historyMap.set(dateKey, []);
-      }
-      historyMap.get(dateKey)!.push(r);
+    .filter((r) => r.deviceId === deviceId && r.completed)
+    .forEach((r) => {
+      const dateKey = new Date(r.timestamp).toISOString().split("T")[0];
+      const stats = historyMap.get(dateKey) || { totalScore: 0, totalMax: 0 };
+      stats.totalScore += r.score;
+      stats.totalMax += r.maxScore;
+      historyMap.set(dateKey, stats);
     });
 
   const history: DailyProgress[] = [];
-  historyMap.forEach((results, date) => {
+  historyMap.forEach((stats, date) => {
     history.push({
       date,
-      percent: calculateCoverage(results)
+      percent:
+        stats.totalMax > 0
+          ? Math.round((stats.totalScore / stats.totalMax) * 100)
+          : 0,
     });
   });
 
-  // Sort by date descending
   return history.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-// Export types if needed elsewhere
 export type DailyProgress = {
   date: string;
   percent: number;
 };
 
-// Helper to get YYYY-MM-DD from timestamp (local time) - Preserved for getTodayPercent
-function getDateKey(timestamp: number): string {
-  const d = new Date(timestamp);
-  const offset = d.getTimezoneOffset() * 60000;
-  const local = new Date(d.getTime() - offset);
-  return local.toISOString().split('T')[0];
-}
-
 export async function getTodayPercent(deviceIdParam?: string): Promise<number> {
-  const history = await getDailyHistory(deviceIdParam);
-  const today = getDateKey(Date.now());
-  const todayEntry = history.find((h) => h.date === today);
-  return todayEntry ? todayEntry.percent : 0;
+  return getCurrent24hProgress(deviceIdParam);
 }

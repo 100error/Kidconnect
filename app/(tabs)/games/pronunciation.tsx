@@ -1,25 +1,34 @@
 import GameWordCard from "@/components/game/GameWordCard";
 import InstructionButton from "@/components/InstructionButton";
 import OfflineGuard from "@/components/OfflineGuard";
-import BackButton from "@/components/ui/BackButton";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { addResult } from "@/services/progress";
+import { speechService } from "@/services/speechService";
 import { speakCorrection, speakPraise } from "@/services/voiceFeedback";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import {
-  FlatList,
-  Modal,
-  Platform,
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    BackHandler,
+    FlatList,
+    Modal,
+    Platform,
+    SafeAreaView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 
 /* ---------------- GAME DATA ---------------- */
@@ -81,11 +90,57 @@ const GAME_WORDS: { word: string; image: any }[] = [
 
 export default function GamePronunciation() {
   const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
+  const isExitingRef = useRef(false); // ✅ Fix: define isExitingRef
 
   const [restartCount, setRestartCount] = useState(0);
   const [completedWords, setCompletedWords] = useState<string[]>([]);
   const [mistakes, setMistakes] = useState<Set<string>>(new Set());
   const [showResult, setShowResult] = useState(false);
+
+  const hasSavedRef = useRef(false); // ✅ SAVE LOCK
+  const sessionIdRef = useRef(`${Date.now()}`); // ✅ UNIQUE SESSION ID
+
+  // Reset lock when screen loads
+  useEffect(() => {
+    hasSavedRef.current = false;
+    sessionIdRef.current = `${Date.now()}`;
+    isExitingRef.current = false;
+  }, []);
+
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    isExitingRef.current = true;
+    try {
+      await speechService.stopRecording();
+      Speech.stop();
+    } catch (e) {
+      console.log("Safe Exit Error:", e);
+    }
+    if (!isMountedRef.current) return;
+    router.replace("/games");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      isExitingRef.current = true;
+      void speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
 
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -103,7 +158,10 @@ export default function GamePronunciation() {
 
   useFocusEffect(
     useCallback(() => {
-      return () => Speech.stop();
+      return () => {
+        void speechService.stopRecording();
+        Speech.stop();
+      };
     }, []),
   );
 
@@ -124,13 +182,14 @@ export default function GamePronunciation() {
   /* ---------------- RESULT HANDLERS ---------------- */
 
   const handleSuccess = (word: string) => {
-    if (completedWords.includes(word)) return;
+    if (completedWords.includes(word) || !isMountedRef.current) return;
 
     const updated = [...completedWords, word];
     setCompletedWords(updated);
 
     if (updated.length === gameItems.length) {
       setTimeout(async () => {
+        if (!isMountedRef.current) return;
         setShowResult(true);
         const score = 10 - mistakes.size;
         const passed = score >= 6;
@@ -143,32 +202,47 @@ export default function GamePronunciation() {
           speakCorrection("Good try! Practice more.");
         }
 
-        await addResult({
-          activityId: "pronunciation-game",
-          category: "game",
-          score: Math.max(0, score),
-          maxScore: 10,
-          completed: true,
-        });
+        if (!hasSavedRef.current) {
+          hasSavedRef.current = true;
+          await safeRun(() =>
+            addResult({
+              activityId: "speakit",
+              sessionId: sessionIdRef.current,
+              category: "game",
+              score: Math.max(0, score),
+              maxScore: 10,
+              completed: true,
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
       }, 800);
     }
   };
 
   const handleFailure = (word: string) => {
+    if (!isMountedRef.current) return;
     setMistakes((prev) => new Set(prev).add(word));
   };
 
   const handleRestart = () => {
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
     Speech.stop();
     setCompletedWords([]);
     setMistakes(new Set());
     setShowResult(false);
+    hasSavedRef.current = false; // ✅ Reset guard on restart
+    sessionIdRef.current = `${Date.now()}`; // ✅ New session ID
+    isExitingRef.current = false;
     setRestartCount((c) => c + 1);
+    isRunningRef.current = false;
   };
 
   const handleExit = () => {
-    Speech.stop();
-    router.replace("/games");
+    if (!isMountedRef.current || isRunningRef.current) return;
+    isRunningRef.current = true;
+    safeExit();
   };
 
   /* ---------------- UI ---------------- */
@@ -180,7 +254,9 @@ export default function GamePronunciation() {
           <StatusBar barStyle="dark-content" />
 
           <View style={styles.header}>
-            <BackButton targetRoute="/games" color="#3E2723" />
+            <TouchableOpacity onPress={safeExit} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={28} color="#3E2723" />
+            </TouchableOpacity>
             <InstructionButton onPress={playInstruction} />
             <Text style={styles.title}>Speak It!</Text>
           </View>
@@ -200,6 +276,7 @@ export default function GamePronunciation() {
                 word={item.word}
                 image={item.image}
                 disabled={completedWords.includes(item.word)}
+                isExiting={isExitingRef.current}
                 color={completedWords.includes(item.word) ? "#E8F5E9" : "#FFF"}
                 style={{ width: itemWidth, margin: 0 }}
                 onSuccess={() => handleSuccess(item.word)}
@@ -325,5 +402,9 @@ const styles = StyleSheet.create({
   modalButtonText: {
     color: "#FFF",
     fontWeight: "800",
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
 });

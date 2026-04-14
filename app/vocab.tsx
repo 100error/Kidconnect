@@ -1,8 +1,10 @@
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/ui/BackButton";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
 import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
+import { speechService } from "@/services/speechService";
 import { Audio } from "expo-av";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
@@ -94,10 +96,15 @@ const lessons = [
 const Vocab = () => {
   const router = useRouter();
   const { AuthGuard } = useRequireAuth();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const clickSoundRef = useRef<Audio.Sound | null>(null);
 
   // ✅ REUSABLE SOUND + NAVIGATION
   const playClickAndNavigate = async (route?: string, goBack?: boolean) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     try {
       await musicService.stopAsync().catch(() => {});
 
@@ -129,26 +136,38 @@ const Vocab = () => {
               console.warn("Error unloading finished click sound:", error);
             }
 
+            if (!isMountedRef.current) {
+              isRunningRef.current = false;
+              return;
+            }
+
             if (goBack) {
               router.back();
             } else if (route) {
               router.push(route as any);
             }
+            isRunningRef.current = false;
           }
         });
       } else {
         // If sound couldn't play (e.g. muted), still navigate
-        if (goBack) router.back();
-        else if (route) router.push(route as any);
+        if (isMountedRef.current) {
+          if (goBack) router.back();
+          else if (route) router.push(route as any);
+        }
+        isRunningRef.current = false;
       }
     } catch (error) {
       console.warn("Navigation sound error, proceeding without sound:", error);
 
-      if (goBack) {
-        router.back();
-      } else if (route) {
-        router.push(route as any);
+      if (isMountedRef.current) {
+        if (goBack) {
+          router.back();
+        } else if (route) {
+          router.push(route as any);
+        }
       }
+      isRunningRef.current = false;
     }
   };
 
@@ -157,6 +176,7 @@ const Vocab = () => {
     useCallback(() => {
       void musicService.playAsync(MUSIC_SOURCES.vocab);
       return () => {
+        speechService.stopRecording();
         Speech.stop();
       };
     }, []),
@@ -169,6 +189,8 @@ const Vocab = () => {
           .unloadAsync()
           .catch((err) => console.log("Unload click sound error:", err));
       }
+      speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 

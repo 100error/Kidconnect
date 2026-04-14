@@ -3,14 +3,18 @@ import BackButton from "@/components/ui/BackButton";
 import ExplanationView from "@/components/ui/ExplanationView";
 import SentenceCard from "@/components/ui/SentenceCard";
 import { useInstruction } from "@/hooks/useInstruction";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { musicService } from "@/services/audio/music";
 import { TTS } from "@/services/audio/tts";
+import { speechService } from "@/services/speechService";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
   Platform,
   ScrollView,
   StatusBar,
@@ -185,6 +189,9 @@ const tenseGroups: TenseGroup[] = [
 ];
 
 export default function Tenses() {
+  const router = useRouter();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false); // ✅ MULTIPLE EXECUTION GUARD
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
   const numColumns = isTablet ? 2 : 1;
@@ -200,6 +207,32 @@ export default function Tenses() {
   );
   const [playingId, setPlayingId] = useState<string | null>(null);
 
+  // ✅ CENTRALIZED SAFE EXIT
+  const safeExit = useCallback(async () => {
+    await speechService.stopRecording();
+    Speech.stop();
+    if (!isMountedRef.current) return;
+    router.replace("/vocab");
+  }, [router, isMountedRef]);
+
+  // Global Cleanup on Unmount
+  useEffect(() => {
+    const backAction = () => {
+      void safeExit();
+      return true;
+    };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction,
+    );
+
+    return () => {
+      backHandler.remove();
+      speechService.stopRecording();
+      Speech.stop();
+    };
+  }, [safeExit]);
+
   // Stop audio on unmount/blur
   useFocusEffect(
     useCallback(() => {
@@ -207,31 +240,40 @@ export default function Tenses() {
       void musicService.stopAsync();
 
       return () => {
+        speechService.stopRecording();
         Speech.stop();
-        setPlayingId(null);
+        if (isMountedRef.current) setPlayingId(null);
       };
     }, []),
   );
 
   const handlePlay = (id: string, text: string) => {
+    if (!isMountedRef.current) return;
     setPlayingId(id);
 
     Speech.stop();
     TTS.speak(text, {
       rate: 0.85, // Slow rate for kids
       pitch: 1.1,
-      onDone: () => setPlayingId(null),
-      onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null),
+      onDone: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
+      onStopped: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
+      onError: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
     });
   };
 
   const handleStop = () => {
     Speech.stop();
-    setPlayingId(null);
+    if (isMountedRef.current) setPlayingId(null);
   };
 
   const handleGroupPlay = (group: TenseGroup) => {
+    if (!isMountedRef.current) return;
     setPlayingId(group.title); // Use title as ID for group speech
 
     const textToSpeak = `${group.title}. What: ${group.what}. Where: ${group.where}. How: ${group.how}. When: ${group.when}.`;
@@ -239,9 +281,15 @@ export default function Tenses() {
     TTS.speak(textToSpeak, {
       rate: 0.85,
       pitch: 1.1,
-      onDone: () => setPlayingId(null),
-      onStopped: () => setPlayingId(null),
-      onError: () => setPlayingId(null),
+      onDone: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
+      onStopped: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
+      onError: () => {
+        if (isMountedRef.current) setPlayingId(null);
+      },
     });
   };
 

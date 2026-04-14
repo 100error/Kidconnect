@@ -1,16 +1,21 @@
-import { documentDirectory, getInfoAsync, readAsStringAsync, writeAsStringAsync } from "expo-file-system/legacy";
+import {
+  documentDirectory,
+  getInfoAsync,
+  readAsStringAsync,
+  writeAsStringAsync,
+} from "expo-file-system/legacy";
 import { getDeviceId } from "../../services/device";
 
 type Category = "practice" | "game";
 
-type ActivityResult = {
+export type ActivityResult = {
   deviceId: string;
   activityId: string;
   category: Category;
   score: number;
   maxScore: number;
   completed: boolean;
-  timestamp: number;
+  timestamp: string; // ISO format
   synced?: boolean;
 };
 
@@ -46,21 +51,53 @@ async function saveDB(db: ProgressDB): Promise<void> {
   await writeAsStringAsync(PROGRESS_FILE, JSON.stringify(db));
 }
 
-export async function addResult(input: Omit<ActivityResult, "deviceId" | "timestamp" | "synced">): Promise<void> {
+export async function addResult(
+  input: Omit<ActivityResult, "deviceId" | "synced" | "timestamp"> & {
+    timestamp?: string;
+  },
+): Promise<void> {
   const db = await loadDB();
   const deviceId = await getDeviceId();
-  const result: ActivityResult = { ...input, deviceId, completed: !!input.completed, timestamp: Date.now(), synced: false };
+  const timestamp = input.timestamp || new Date().toISOString();
+
+  // ✅ DUPLICATE GUARD: Prevent identical activity results within 3 seconds
+  const isDuplicate = db.results.some((r) => {
+    if (r.activityId !== input.activityId) return false;
+    const timeDiff = Math.abs(
+      new Date(r.timestamp).getTime() - new Date(timestamp).getTime(),
+    );
+    return timeDiff < 3000; // 3 second threshold
+  });
+
+  if (isDuplicate) {
+    console.warn(`Duplicate result ignored for activity: ${input.activityId}`);
+    return;
+  }
+
+  const result: ActivityResult = {
+    ...input,
+    deviceId,
+    completed: !!input.completed,
+    timestamp,
+    synced: false,
+  };
   db.results.push(result);
   await saveDB(db);
   emit(deviceId);
 }
 
-export async function getOverallPercent(deviceIdParam?: string): Promise<number> {
+export async function getOverallPercent(
+  deviceIdParam?: string,
+): Promise<number> {
   const db = await loadDB();
   const deviceId = deviceIdParam || (await getDeviceId());
-  const items = db.results.filter((r) => r.deviceId === deviceId && r.completed);
+  const items = db.results.filter(
+    (r) => r.deviceId === deviceId && r.completed,
+  );
   if (items.length === 0) return 0;
-  const normalized = items.map((r) => (r.maxScore > 0 ? (r.score / r.maxScore) * 100 : 0));
+  const normalized = items.map((r) =>
+    r.maxScore > 0 ? (r.score / r.maxScore) * 100 : 0,
+  );
   const avg = normalized.reduce((a, b) => a + b, 0) / normalized.length;
   return Math.round(avg);
 }
@@ -73,19 +110,27 @@ function emit(deviceId: string) {
   });
 }
 
-export function subscribeProgress(listener: (deviceId: string) => void): () => void {
+export function subscribeProgress(
+  listener: (deviceId: string) => void,
+): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-export async function getUnsynced(deviceIdParam?: string): Promise<ActivityResult[]> {
+export async function getUnsynced(
+  deviceIdParam?: string,
+): Promise<ActivityResult[]> {
   const db = await loadDB();
   const deviceId = deviceIdParam || (await getDeviceId());
   return db.results.filter((r) => r.deviceId === deviceId && !r.synced);
 }
 
-export async function markSynced(predicate: (r: ActivityResult) => boolean): Promise<void> {
+export async function markSynced(
+  predicate: (r: ActivityResult) => boolean,
+): Promise<void> {
   const db = await loadDB();
-  db.results = db.results.map((r) => (predicate(r) ? { ...r, synced: true } : r));
+  db.results = db.results.map((r) =>
+    predicate(r) ? { ...r, synced: true } : r,
+  );
   await saveDB(db);
 }

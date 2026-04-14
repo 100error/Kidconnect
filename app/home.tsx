@@ -2,37 +2,36 @@ import GradientButton from "@/components/GradientButton";
 import KicoMascot from "@/components/KicoMascot";
 import SettingsModal from "@/components/SettingsModal"; // Import Modal
 import TutorialOverlay from "@/components/TutorialOverlay";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { audioService } from "@/services/audio/audioService";
 import { MUSIC_SOURCES, musicService } from "@/services/audio/music";
 import { profileService } from "@/services/profile"; // Import Profile Service
+import { speechService } from "@/services/speechService";
 import {
-  DailyProgress,
-  getCurrent24hProgress,
-  getDailyHistory,
-  subscribeProgress,
+    DailyProgress,
+    getCurrent24hProgress,
+    subscribeProgress,
 } from "@/services/progress";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import {
-  documentDirectory,
-  getInfoAsync,
-  readAsStringAsync,
-  writeAsStringAsync,
+    documentDirectory,
+    getInfoAsync,
+    readAsStringAsync,
+    writeAsStringAsync,
 } from "expo-file-system/legacy";
 import { useFocusEffect } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
-  FlatList,
-  ImageBackground,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    BackHandler,
+    Dimensions,
+    ImageBackground,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import * as Progress from "react-native-progress";
 
@@ -42,6 +41,8 @@ const TUTORIAL_FILE = `${documentDirectory}tutorial_seen.json`;
 
 const Home = () => {
   const navigation = useNavigation<any>();
+  const { isMountedRef, safeRun } = useSafeAsync();
+  const isRunningRef = useRef(false);
   const lessonRef = useRef<View>(null);
   const progressRef = useRef<View>(null);
 
@@ -56,7 +57,6 @@ const Home = () => {
   >(undefined);
 
   const [overallProgress, setOverallProgress] = useState<number>(0);
-  const [historyVisible, setHistoryVisible] = useState(false);
   const [historyData, setHistoryData] = useState<DailyProgress[]>([]);
   const [username, setUsername] = useState<string | null>(null);
 
@@ -102,20 +102,23 @@ const Home = () => {
 
       // Check progress on focus (handles 24h reset)
       getCurrent24hProgress()
-        .then(setOverallProgress)
+        .then((p) => {
+          if (isMountedRef.current) setOverallProgress(p);
+        })
         .catch(() => {});
 
       // Load Profile Name
       profileService
         .getProfile()
         .then((p) => {
-          if (p?.username) setUsername(p.username);
+          if (isMountedRef.current && p?.username) setUsername(p.username);
         })
         .catch(() => {});
 
       return () => {
         // We don't stop here, because we want music to transition smoothly
         // musicService.playAsync will handle stopping the previous track
+        speechService.stopRecording();
         Speech.stop(); // Stop any narration/TTS
       };
     }, []),
@@ -125,13 +128,17 @@ const Home = () => {
     checkTutorial();
     // Load PROGRESS initially
     getCurrent24hProgress()
-      .then(setOverallProgress)
+      .then((p) => {
+        if (isMountedRef.current) setOverallProgress(p);
+      })
       .catch(() => {});
 
     // Subscribe to updates
     const unsub = subscribeProgress((_id) => {
       getCurrent24hProgress()
-        .then(setOverallProgress)
+        .then((p) => {
+          if (isMountedRef.current) setOverallProgress(p);
+        })
         .catch(() => {});
     });
 
@@ -143,7 +150,7 @@ const Home = () => {
         typeof lessonRef.current.measureInWindow === "function"
       ) {
         lessonRef.current.measureInWindow((x, y, width, height) => {
-          setLessonLayout({ x, y, width, height });
+          if (isMountedRef.current) setLessonLayout({ x, y, width, height });
         });
       }
       // Measure progress circle container
@@ -152,7 +159,7 @@ const Home = () => {
         typeof progressRef.current.measureInWindow === "function"
       ) {
         progressRef.current.measureInWindow((x, y, width, height) => {
-          setProgressLayout({ x, y, width, height });
+          if (isMountedRef.current) setProgressLayout({ x, y, width, height });
         });
       }
     };
@@ -161,6 +168,8 @@ const Home = () => {
     return () => {
       clearTimeout(id);
       unsub();
+      speechService.stopRecording();
+      Speech.stop();
     };
   }, []);
 
@@ -168,20 +177,26 @@ const Home = () => {
     try {
       const info = await getInfoAsync(TUTORIAL_FILE);
       if (!info.exists) {
-        setIsHomeTutorial(true);
-        setShouldShowTutorial(true);
+        if (isMountedRef.current) {
+          setIsHomeTutorial(true);
+          setShouldShowTutorial(true);
+        }
         return;
       }
       try {
         const content = await readAsStringAsync(TUTORIAL_FILE);
         const data = JSON.parse(content || "{}");
         if (!data.seen) {
+          if (isMountedRef.current) {
+            setIsHomeTutorial(true);
+            setShouldShowTutorial(true);
+          }
+        }
+      } catch {
+        if (isMountedRef.current) {
           setIsHomeTutorial(true);
           setShouldShowTutorial(true);
         }
-      } catch {
-        setIsHomeTutorial(true);
-        setShouldShowTutorial(true);
       }
     } catch (e) {
       console.log("Error checking tutorial:", e);
@@ -189,7 +204,7 @@ const Home = () => {
   };
 
   const handleTutorialClose = async () => {
-    setTutorialVisible(false);
+    if (isMountedRef.current) setTutorialVisible(false);
     try {
       await writeAsStringAsync(TUTORIAL_FILE, JSON.stringify({ seen: true }));
     } catch (e) {
@@ -198,25 +213,24 @@ const Home = () => {
   };
 
   const handleLessonPress = async (item: { screen: string; title: string }) => {
+    if (isRunningRef.current || !isMountedRef.current) return;
+    isRunningRef.current = true;
+
     // Stop any existing TTS before navigating
     audioService.speak(item.title);
 
     try {
-      navigation.navigate(item.screen);
+      if (isMountedRef.current) navigation.navigate(item.screen);
     } catch (error) {
       console.log(error);
-      navigation.navigate(item.screen);
+      if (isMountedRef.current) navigation.navigate(item.screen);
+    } finally {
+      isRunningRef.current = false;
     }
   };
 
-  const handleProgressPress = async () => {
-    try {
-      const history = await getDailyHistory();
-      setHistoryData(history);
-      setHistoryVisible(true);
-    } catch (e) {
-      console.log("Error loading history", e);
-    }
+  const handleProgressPress = () => {
+    if (isMountedRef.current) navigation.navigate("progress-details");
   };
 
   // Defer showing tutorial until key layouts are available, with a fallback timer
@@ -224,15 +238,17 @@ const Home = () => {
     if (!shouldShowTutorial) return;
 
     if (isHomeTutorial) {
-      setTutorialVisible(true);
+      if (isMountedRef.current) setTutorialVisible(true);
       return;
     }
 
     if (lessonLayout || progressLayout) {
-      setTutorialVisible(true);
+      if (isMountedRef.current) setTutorialVisible(true);
       return;
     }
-    const id = setTimeout(() => setTutorialVisible(true), 1500);
+    const id = setTimeout(() => {
+      if (isMountedRef.current) setTutorialVisible(true);
+    }, 1500);
     return () => clearTimeout(id);
   }, [shouldShowTutorial, isHomeTutorial, lessonLayout, progressLayout]);
 
@@ -312,62 +328,6 @@ const Home = () => {
             progressLayout={progressLayout}
             isHomeTutorial={isHomeTutorial}
           />
-
-          {/* History Modal */}
-          <Modal
-            visible={historyVisible}
-            animationType="slide"
-            transparent={true}
-            onRequestClose={() => setHistoryVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>My Progress 📅</Text>
-                  <TouchableOpacity onPress={() => setHistoryVisible(false)}>
-                    <Ionicons name="close-circle" size={32} color="#999" />
-                  </TouchableOpacity>
-                </View>
-
-                {historyData.length === 0 ? (
-                  <View style={styles.emptyHistory}>
-                    <Text style={styles.emptyText}>
-                      Start playing to see your history!
-                    </Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={historyData}
-                    keyExtractor={(item) => item.date}
-                    contentContainerStyle={styles.historyList}
-                    renderItem={({ item }) => (
-                      <View style={styles.historyItem}>
-                        <View style={styles.dateContainer}>
-                          <Ionicons
-                            name="calendar-outline"
-                            size={20}
-                            color="#4AC3FF"
-                          />
-                          <Text style={styles.historyDate}>{item.date}</Text>
-                        </View>
-                        <View style={styles.scoreContainer}>
-                          <View
-                            style={[
-                              styles.progressBar,
-                              { width: `${Math.min(item.percent, 100)}%` },
-                            ]}
-                          />
-                          <Text style={styles.historyScore}>
-                            {item.percent}%
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  />
-                )}
-              </View>
-            </View>
-          </Modal>
         </ScrollView>
       </SafeAreaView>
     </ImageBackground>
@@ -431,84 +391,6 @@ const styles = StyleSheet.create({
   // Removed overlapping absolute positioning styles
   progressContainer: {
     // Legacy style removed to prevent overlap
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    width: "90%",
-    maxHeight: "80%",
-    backgroundColor: "#eef7f9",
-    borderRadius: 25,
-    padding: 20,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    paddingBottom: 10,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  historyList: {
-    paddingBottom: 20,
-  },
-  historyItem: {
-    marginBottom: 15,
-    backgroundColor: "#b0e9f3c2",
-    padding: 15,
-    borderRadius: 15,
-  },
-  dateContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  historyDate: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#555",
-    marginLeft: 8,
-  },
-  scoreContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 20,
-    backgroundColor: "#ffffffc2",
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#91daff",
-  },
-  historyScore: {
-    position: "absolute",
-    right: 10,
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  emptyHistory: {
-    alignItems: "center",
-    padding: 30,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#999",
-    textAlign: "center",
   },
 });
 
